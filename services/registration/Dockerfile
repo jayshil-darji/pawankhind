@@ -20,7 +20,7 @@ ENV NODE_ENV=production HOST=0.0.0.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/schemas/package.json packages/schemas/
 COPY services/registration/package.json services/registration/
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=build /app/packages/schemas/dist packages/schemas/dist
 COPY --from=build /app/services/registration/dist services/registration/dist
 USER node
