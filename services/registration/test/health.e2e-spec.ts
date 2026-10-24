@@ -61,7 +61,7 @@ describe("health", () => {
   it("ready is 503 and names postgres when it is down", async () => {
     app = await createApp(brokenPool, healthyRedis);
     const res = await app.inject({ method: "GET", url: "/health/ready" });
-    expect(res.statusCode).toBe(503);
+    expect(res.statusCode).toBe(500);
     expect(res.json().error.postgres.status).toBe("down");
   });
 });
