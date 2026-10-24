@@ -1,0 +1,14 @@
+{
+    "name": "@pawankhind/registration",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "check-types": "tsc --noEmit",
+        "start": "node dist/index.js"
+    },
+    "dependencies": {
+        "@pawankhind/schemas": "workspace:*"
+    }
+}
