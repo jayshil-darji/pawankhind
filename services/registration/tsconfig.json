@@ -2,7 +2,12 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "outDir": "dist",
-        "rootDir": "src"
+        "rootDir": ".",
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "isolatedModules": true,
+        "types": ["node", "vitest/globals"]
     },
-    "include": ["src"],
+    "include": ["src", "test", "vitest.config.ts"],
+    "exclude": ["node_modules", "dist"]
 }
