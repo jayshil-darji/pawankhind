@@ -1,10 +1,7 @@
 import { Test } from "@nestjs/testing";
 import { AppModule } from "../src/app.module.js";
 import { PG_POOL, REDIS } from "../src/infra/tokens.js";
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from "@nestjs/platform-fastify";
+import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 
 async function createApp(pool: unknown, redis: unknown) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -14,24 +11,22 @@ async function createApp(pool: unknown, redis: unknown) {
     .useValue(redis)
     .compile();
 
-  const app = moduleRef.createNestApplication<NestFastifyApplication>(
-    new FastifyAdapter(),
-  );
+  const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return app;
 }
 
 const healthyPool = {
-  query: async () => ({ rows: [] }),
+  query: () => ({ rows: [] }),
   end: async () => {},
 };
 const healthyRedis = {
-  ping: async () => "PONG",
+  ping: () => "PONG",
   disconnect: async () => {},
 };
 const brokenPool = {
-  query: async () => {
+  query: () => {
     throw new Error("connection refused");
   },
   end: async () => {},
@@ -47,6 +42,7 @@ describe("health", () => {
   it("live answers even when a dependency is down", async () => {
     app = await createApp(brokenPool, healthyRedis);
     const res = await app.inject({ method: "GET", url: "/health/live" });
+
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: "ok" });
   });
@@ -54,14 +50,19 @@ describe("health", () => {
   it("ready is 200 when postgres and redis answer", async () => {
     app = await createApp(healthyPool, healthyRedis);
     const res = await app.inject({ method: "GET", url: "/health/ready" });
+    const body = res.json<{ status: string }>();
+
+    expect(body.status).toBe("ok");
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("ok");
+    expect(body.status).toBe("ok");
   });
 
   it("ready is 503 and names postgres when it is down", async () => {
     app = await createApp(brokenPool, healthyRedis);
     const res = await app.inject({ method: "GET", url: "/health/ready" });
+    const body = res.json<{ error: { postgres: { status: string } } }>();
+
     expect(res.statusCode).toBe(503);
-    expect(res.json().error.postgres.status).toBe("down");
+    expect(body.error.postgres.status).toBe("down");
   });
 });
