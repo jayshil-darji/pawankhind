@@ -12,10 +12,10 @@ CREATE TABLE events (
   reg_opens_at  timestamptz NOT NULL,
   reg_closes_at timestamptz NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
-  CHECK (reg_closes_at > reg_opens_at),
-  CHECK (slots_taken >= 0 AND slots_taken <= capacity),
-  CHECK (next_bib >= first_bib AND next_bib <= first_bib + capacity),
-  CHECK (next_bib - first_bib <= slots_taken)
+  CONSTRAINT reg_window_valid       CHECK (reg_closes_at > reg_opens_at),
+  CONSTRAINT slots_within_capacity  CHECK (slots_taken >= 0 AND slots_taken <= capacity),
+  CONSTRAINT bib_within_range       CHECK (next_bib >= first_bib AND next_bib <= first_bib + capacity),
+  CONSTRAINT bibs_need_slots        CHECK (next_bib - first_bib <= slots_taken)
 );
 
 CREATE TABLE registrations (
@@ -36,10 +36,10 @@ CREATE TABLE registrations (
   bib_number               integer,
   confirmed_at             timestamptz,
   created_at               timestamptz NOT NULL DEFAULT now(),
-  CHECK (status <> 'held' OR hold_expires_at IS NOT NULL),
-  CHECK ((status = 'confirmed') = (bib_number IS NOT NULL)),
-  CHECK ((status = 'confirmed') = (confirmed_at IS NOT NULL)),
-  CHECK (channel = 'online' OR entered_by IS NOT NULL),
+  CONSTRAINT held_needs_expiry     CHECK (status <> 'held' OR hold_expires_at IS NOT NULL),
+  CONSTRAINT confirmed_has_bib     CHECK ((status = 'confirmed') = (bib_number IS NOT NULL)),
+  CONSTRAINT confirmed_has_time    CHECK ((status = 'confirmed') = (confirmed_at IS NOT NULL)),
+  CONSTRAINT admin_needs_operator  CHECK (channel = 'online' OR entered_by IS NOT NULL),
   UNIQUE (event_id, bib_number)
 );
 
