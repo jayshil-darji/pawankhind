@@ -23,3 +23,9 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Pin major versions (TypeScript stays on 6.x until NestJS CLI supports 7).
 - BIB numbers are issued only after a server-confirmed payment, inside one transaction. Never from the client.
 - No secrets in the repo, logs or error messages.
+
+## Database
+
+- Schema changes only through numbered SQL files in services/registration/migrations (node-pg-migrate). Never edit an applied migration; add a new one.
+- Money is integer paise. Times are timestamptz. Mobile numbers are 10 digits, no country code.
+- Slot and BIB counters live on the events row and change only with single UPDATE statements inside transactions.

@@ -8,7 +8,9 @@
     "check-types": "tsc --noEmit",
     "start": "node --env-file=../../.env dist/main.js",
     "start:dev": "nest start --watch --env-file=../../.env",
-    "test": "vitest run"
+    "test": "vitest run",
+    "migrate": "node --env-file=../../.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m migrations",
+    "migrate:down": "node --env-file=../../.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations"
   },
   "dependencies": {
     "@nestjs/common": "^12.2.0",
@@ -17,6 +19,7 @@
     "@nestjs/terminus": "^12.1.0",
     "@pawankhind/schemas": "workspace:*",
     "ioredis": "^6.0.0",
+    "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
