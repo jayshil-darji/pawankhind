@@ -108,6 +108,10 @@ resource "aws_instance" "app" {
     systemctl enable --now docker
   EOT
 
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = {
     Name = "pawankhind-dev"
   }
