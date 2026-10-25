@@ -47,6 +47,19 @@ data "aws_iam_policy_document" "github_ci" {
     ]
     resources = [aws_ecr_repository.registration.arn]
   }
+
+  statement {
+    actions = ["ssm:SendCommand"]
+    resources = [
+      aws_instance.app.arn,
+      "arn:aws:ssm:ap-southeast-2::document/AWS-RunShellScript",
+    ]
+  }
+
+  statement {
+    actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "github_ci" {
