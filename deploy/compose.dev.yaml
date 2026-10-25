@@ -1,0 +1,60 @@
+name: pawankhind
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pawankhind
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ser POSTGRES_PASSWORD_PASSWORD in .env}
+      POSTGRES_DB: registration
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRS_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  registration:
+    image: ${REGISTRATION_IMAGE:?set REGISTRATION_IMAGE in .env}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://pawankhind:${POSTGRES_PASSWORD}@postgres:5432/registration
+      REDIS_URL: redis://redis:6379
+      PORT: "3001"
+      HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
