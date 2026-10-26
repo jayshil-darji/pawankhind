@@ -1,5 +1,6 @@
 import pg from "pg";
 import { withTransaction } from "../infra/transaction.js";
+import { isUniqueViolation } from "../infra/db-errors.js";
 
 export interface ParticipantInput {
   fullName: string;
@@ -101,13 +102,4 @@ export class RegistrationsRepository {
     );
     return result.rows[0].released;
   }
-}
-
-function isUniqueViolation(error: unknown, constraint: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: string }).code === "23505" &&
-    (error as { constraint?: string }).constraint === constraint
-  );
 }
