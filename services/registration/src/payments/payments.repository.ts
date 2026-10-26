@@ -75,7 +75,7 @@ export class PaymentsRepository {
       // Lock order: payment -> registration -> event.
       const pay = await client.query<PaymentRow>(
         `SELECT id, registration_id, status, amount_paise
-           FROM payments WHERE provider_order_id = $1`,
+           FROM payments WHERE provider_order_id = $1 FOR UPDATE`,
         [input.providerOrderId],
       );
       const payment = pay.rows[0];
