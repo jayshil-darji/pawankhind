@@ -2,6 +2,8 @@ import { RegistrationsRepository } from "../src/registrations/registrations.repo
 import { PaymentsRepository } from "../src/payments/payments.repository.js";
 import { startTestDatabase, person, TestDatabase } from "./support/database.js";
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 let db: TestDatabase;
 let registrations: RegistrationsRepository;
 let payments: PaymentsRepository;
@@ -56,6 +58,18 @@ async function event() {
       [eventId],
     )
   ).rows[0];
+}
+
+async function waitForBlocked(count: number) {
+  for (let i = 0; i < 150; i++) {
+    const r = await db.pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    if (r.rows[0].n >= count) return;
+    await sleep(20);
+  }
+  throw new Error(`fewer than ${count} sessions became blocked`);
 }
 
 describe("confirmOnlinePayment", () => {
@@ -176,5 +190,25 @@ describe("confirmOnlinePayment", () => {
       )
     ).rows[0];
     expect(row.status).toBe("captured");
+  });
+
+  it("issues one BIB when 10 identical payments are forced to overlap", async () => {
+    const h = await heldWithOrder(1);
+
+    const blocker = await db.pool.connect();
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT 1 FROM registrations WHERE id = $1 FOR UPDATE", [h.registrationId]);
+
+    const pending = Array.from({ length: 10 }, () => confirm(h));
+    await waitForBlocked(10);
+
+    await blocker.query("COMMIT");
+    blocker.release();
+
+    const results = await Promise.all(pending);
+
+    expect(results.every((r) => r.ok && r.bib === 1001)).toBe(true);
+    expect(results.filter((r) => r.ok && !r.alreadyConfirmed)).toHaveLength(1);
+    expect((await event()).next_bib).toBe(1002);
   });
 });

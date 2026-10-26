@@ -13,7 +13,7 @@ export async function startTestDatabase(): Promise<TestDatabase> {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     "postgres:17",
   ).start();
-  const pool = new pg.Pool({ connectionString: container.getConnectionUri() });
+  const pool = new pg.Pool({ connectionString: container.getConnectionUri(), max: 20 });
   const dir = join(import.meta.dirname, "../../migrations");
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
