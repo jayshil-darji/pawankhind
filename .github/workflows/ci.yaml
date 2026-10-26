@@ -23,6 +23,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm turbo build check-types test
