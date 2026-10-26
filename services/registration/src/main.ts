@@ -5,7 +5,12 @@ import { AppModule } from "./app.module.js";
 
 async function bootstrap() {
   const config = loadConfig();
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({
+      bodyLimit: 16 * 1024,
+    }),
+  );
   app.enableShutdownHooks();
 
   await app.listen(config.PORT, config.HOST);

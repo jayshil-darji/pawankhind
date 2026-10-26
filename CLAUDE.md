@@ -34,3 +34,13 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - Payments: a payment is real only after the server (a) verifies the Razorpay signature with an order ID from our own database, and (b) fetches the payment from Razorpay and checks status 'captured' and amount. Amounts always come from events.fee_paise, never from a request.
 - Razorpay keys: test keys only (rzp_test_...) until a deliberate go-live. Never log or echo secrets.
+
+- HTTP layer: validate every body with the shared zod schemas; never accept amounts, order IDs or BIBs from clients; error responses carry a stable code, never raw database errors.
+
+## HTTP and payments rules
+
+- The client never sends amounts, order IDs or BIBs. The server decides all three.
+- /api/payments/verify must check the signature against the order ID stored on OUR server, then confirm with Razorpay that the payment is `captured` and the amount matches. Never skip either check.
+- BIBs are issued only inside confirmOnlinePayment, in one transaction. No other code path may assign a BIB.
+- Never log secrets, signatures or full request bodies.
+- Every endpoint validates input with the zod schemas in @pawankhind/schemas.

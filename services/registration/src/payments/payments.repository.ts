@@ -141,4 +141,17 @@ export class PaymentsRepository {
       return { ok: true, bib, registrationId: registration.id, alreadyConfirmed: false };
     });
   }
+
+  async findLatestOrder(
+    registrationId: string,
+  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
+    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
+      `SELECT provider_order_id, amount_paise FROM payments
+        WHERE registration_id = $1 AND method = 'razorpay' AND provider_order_id IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [registrationId],
+    );
+    const row = r.rows[0];
+    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
+  }
 }

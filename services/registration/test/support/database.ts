@@ -7,6 +7,7 @@ import type { ParticipantInput } from "../../src/registrations/registrations.rep
 export interface TestDatabase {
   pool: pg.Pool;
   stop: () => Promise<void>;
+  connectionUri: string;
 }
 
 export async function startTestDatabase(): Promise<TestDatabase> {
@@ -27,6 +28,7 @@ export async function startTestDatabase(): Promise<TestDatabase> {
       await pool.end();
       await container.stop();
     },
+    connectionUri: container.getConnectionUri(),
   };
 }
 
