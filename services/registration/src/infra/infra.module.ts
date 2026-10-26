@@ -1,7 +1,7 @@
 import { Global, Inject, Logger, Module, OnApplicationShutdown } from "@nestjs/common";
 import { loadConfig } from "../config.js";
 import PG from "pg";
-import { PG_POOL, REDIS } from "./tokens.js";
+import { APP_CONFIG, PG_POOL, REDIS } from "./tokens.js";
 import { Redis } from "ioredis";
 
 @Global()
@@ -19,8 +19,12 @@ import { Redis } from "ioredis";
         return client;
       },
     },
+    {
+      provide: APP_CONFIG,
+      useFactory: () => loadConfig(),
+    },
   ],
-  exports: [PG_POOL, REDIS],
+  exports: [PG_POOL, REDIS, APP_CONFIG],
 })
 export class InfraModule implements OnApplicationShutdown {
   constructor(

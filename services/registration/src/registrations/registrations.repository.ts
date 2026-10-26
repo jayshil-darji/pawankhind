@@ -102,4 +102,36 @@ export class RegistrationsRepository {
     );
     return result.rows[0].released;
   }
+
+  async getCurrentEvent(): Promise<{ id: string; feePaise: number } | null> {
+    const r = await this.pool.query<{ id: string; fee_paise: number }>(
+      "SELECT id, fee_paise FROM events ORDER BY event_date DESC LIMIT 1",
+    );
+    const row = r.rows[0];
+    return row ? { id: row.id, feePaise: row.fee_paise } : null;
+  }
+
+  /** Releases one hold immediately (used when payment setup fails). */
+  async abandonHold(registrationId: string): Promise<void> {
+    await this.pool.query(
+      `WITH gone AS (
+         UPDATE registrations SET status = 'expired'
+          WHERE id = $1 AND status = 'held'
+          RETURNING event_id)
+       UPDATE events e SET slots_taken = e.slots_taken - 1
+         FROM gone WHERE e.id = gone.event_id`,
+      [registrationId],
+    );
+  }
+
+  async getPublicStatus(
+    registrationId: string,
+  ): Promise<{ status: string; bib: number | null } | null> {
+    const r = await this.pool.query<{ status: string; bib_number: number | null }>(
+      "SELECT status, bib_number FROM registrations WHERE id = $1",
+      [registrationId],
+    );
+    const row = r.rows[0];
+    return row ? { status: row.status, bib: row.bib_number } : null;
+  }
 }

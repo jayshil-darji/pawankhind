@@ -1,0 +1,43 @@
+import { Module } from "@nestjs/common";
+import pg from "pg";
+import { Config } from "../config.js";
+import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL } from "../infra/tokens.js";
+import { PaymentsRepository } from "../payments/payments.repository.js";
+import type { PaymentProvider } from "../payments/payment-provider.js";
+import { RazorpayProvider } from "../payments/razorpay.provider.js";
+import { RegistrationFlow } from "./registration-flow.service.js";
+import { RegistrationsController } from "./registrations.controller.js";
+import { RegistrationsRepository } from "./registrations.repository.js";
+
+@Module({
+  controllers: [RegistrationsController],
+  providers: [
+    {
+      provide: RegistrationsRepository,
+      useFactory: (pool: pg.Pool) => new RegistrationsRepository(pool),
+      inject: [PG_POOL],
+    },
+    {
+      provide: PaymentsRepository,
+      useFactory: (pool: pg.Pool) => new PaymentsRepository(pool),
+      inject: [PG_POOL],
+    },
+    {
+      provide: PAYMENT_PROVIDER,
+      useFactory: (config: Config) =>
+        new RazorpayProvider({
+          keyId: config.RAZORPAY_KEY_ID,
+          keySecret: config.RAZORPAY_KEY_SECRET,
+          webhookSecret: config.RAZORPAY_WEBHOOK_SECRET,
+        }),
+      inject: [APP_CONFIG],
+    },
+    {
+      provide: RegistrationFlow,
+      useFactory: (r: RegistrationsRepository, p: PaymentsRepository, provider: PaymentProvider) =>
+        new RegistrationFlow(r, p, provider),
+      inject: [RegistrationsRepository, PaymentsRepository, PAYMENT_PROVIDER],
+    },
+  ],
+})
+export class RegistrationsModule {}
