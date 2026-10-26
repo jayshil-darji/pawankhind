@@ -44,3 +44,10 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - BIBs are issued only inside confirmOnlinePayment, in one transaction. No other code path may assign a BIB.
 - Never log secrets, signatures or full request bodies.
 - Every endpoint validates input with the zod schemas in @pawankhind/schemas.
+
+## Web app rules
+
+- The browser never decides "paid": show a BIB only when /api/payments/verify or /status returns `confirmed`.
+- Never send amounts, order IDs or BIBs from the client. Only participant fields and the Razorpay payment id and signature.
+- Use the shared zod schemas from @pawankhind/schemas for form validation. Never copy rules into the web app.
+- The API is reached through the relative path /api (Vite proxy in dev). No hard-coded URLs or keys.
