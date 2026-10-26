@@ -29,3 +29,5 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Schema changes only through numbered SQL files in services/registration/migrations (node-pg-migrate). Never edit an applied migration; add a new one.
 - Money is integer paise. Times are timestamptz. Mobile numbers are 10 digits, no country code.
 - Slot and BIB counters live on the events row and change only with single UPDATE statements inside transactions.
+
+- Concurrency tests must be able to fail: after writing one, break the code on purpose and confirm the test goes red. Race tests force overlap (held-lock barrier); they never rely on timing luck.
