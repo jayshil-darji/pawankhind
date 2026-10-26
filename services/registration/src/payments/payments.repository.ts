@@ -1,0 +1,144 @@
+import pg from "pg";
+import { withTransaction } from "../infra/transaction.js";
+import { isUniqueViolation } from "../infra/db-errors.js";
+
+export type ConfirmResult =
+  | { ok: true; bib: number; registrationId: string; alreadyConfirmed: boolean }
+  | {
+      ok: false;
+      reason: "unknown_order" | "amount_mismatch" | "no_slot" | "duplicate_registration";
+    };
+
+interface PaymentRow {
+  id: string;
+  registration_id: string;
+  status: string;
+  amount_paise: number;
+}
+
+interface RegistrationRow {
+  id: string;
+  event_id: string;
+  status: string;
+  bib_number: number | null;
+}
+
+export class PaymentsRepository {
+  constructor(private readonly pool: pg.Pool) {}
+
+  /** Creates the payment row for a held registration. Amount always comes from the event fee. */
+  async createPaymentIntent(
+    registrationId: string,
+    providerOrderId: string,
+  ): Promise<{ paymentId: string; amountPaise: number } | null> {
+    const result = await this.pool.query<{ id: string; amount_paise: number }>(
+      `INSERT INTO payments (registration_id, method, status, amount_paise, provider_order_id)
+       SELECT r.id, 'razorpay', 'created', e.fee_paise, $2
+         FROM registrations r JOIN events e ON e.id = r.event_id
+        WHERE r.id = $1 AND r.status = 'held'
+       RETURNING id, amount_paise`,
+      [registrationId, providerOrderId],
+    );
+    const row = result.rows[0];
+    return row ? { paymentId: row.id, amountPaise: row.amount_paise } : null;
+  }
+
+  /** Call only after the payment service has verified the gateway signature. */
+  async confirmOnlinePayment(input: {
+    providerOrderId: string;
+    providerPaymentId: string;
+    amountPaise: number;
+  }): Promise<ConfirmResult> {
+    try {
+      return await this.confirmInTransaction(input);
+    } catch (error) {
+      if (isUniqueViolation(error, "registrations_one_active_per_person")) {
+        // The same person registered again after this hold expired. Money is real: record it.
+        await this.pool.query(
+          `UPDATE payments
+              SET status = 'captured', provider_payment_id = $2, captured_at = now()
+            WHERE provider_order_id = $1 AND status <> 'captured'`,
+          [input.providerOrderId, input.providerPaymentId],
+        );
+        return { ok: false, reason: "duplicate_registration" };
+      }
+      throw error;
+    }
+  }
+
+  private confirmInTransaction(input: {
+    providerOrderId: string;
+    providerPaymentId: string;
+    amountPaise: number;
+  }): Promise<ConfirmResult> {
+    return withTransaction(this.pool, async (client): Promise<ConfirmResult> => {
+      // Lock order: payment -> registration -> event.
+      const pay = await client.query<PaymentRow>(
+        `SELECT id, registration_id, status, amount_paise
+           FROM payments WHERE provider_order_id = $1`,
+        [input.providerOrderId],
+      );
+      const payment = pay.rows[0];
+      if (!payment) return { ok: false, reason: "unknown_order" };
+
+      const reg = await client.query<RegistrationRow>(
+        `SELECT id, event_id, status, bib_number FROM registrations WHERE id = $1 FOR UPDATE`,
+        [payment.registration_id],
+      );
+      const registration = reg.rows[0];
+
+      if (payment.status === "captured" && registration.bib_number !== null) {
+        return {
+          ok: true,
+          bib: registration.bib_number,
+          registrationId: registration.id,
+          alreadyConfirmed: true,
+        };
+      }
+
+      if (input.amountPaise !== payment.amount_paise) {
+        return { ok: false, reason: "amount_mismatch" };
+      }
+
+      if (registration.status === "expired") {
+        const retaken = await client.query(
+          `UPDATE events SET slots_taken = slots_taken + 1
+            WHERE id = $1 AND slots_taken < capacity`,
+          [registration.event_id],
+        );
+        if (retaken.rowCount === 0) {
+          await client.query(
+            `UPDATE payments
+                SET status = 'captured', provider_payment_id = $2, captured_at = now()
+              WHERE id = $1`,
+            [payment.id, input.providerPaymentId],
+          );
+          return { ok: false, reason: "no_slot" };
+        }
+      }
+
+      const allocated = await client.query<{ bib: number }>(
+        `UPDATE events SET next_bib = next_bib + 1
+          WHERE id = $1
+          RETURNING next_bib - 1 AS bib`,
+        [registration.event_id],
+      );
+      const bib = allocated.rows[0].bib;
+
+      await client.query(
+        `UPDATE registrations
+            SET status = 'confirmed', bib_number = $2, confirmed_at = now()
+          WHERE id = $1`,
+        [registration.id, bib],
+      );
+      await client.query(
+        `UPDATE payments
+            SET status = 'captured', provider_payment_id = $2, captured_at = now()
+          WHERE id = $1`,
+        [payment.id, input.providerPaymentId],
+      );
+
+      return { ok: true, bib, registrationId: registration.id, alreadyConfirmed: false };
+    });
+  }
+}
