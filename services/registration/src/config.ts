@@ -5,6 +5,9 @@ const schema = z.object({
   REDIS_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().default("127.0.0.1"),
+  RAZORPAY_KEY_ID: z.string().startsWith("rzp_test_", "use a TEST key (rzp_test_...)"),
+  RAZORPAY_KEY_SECRET: z.string().min(1),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(8),
 });
 
 export type Config = z.infer<typeof schema>;

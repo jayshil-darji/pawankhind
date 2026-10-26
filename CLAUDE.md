@@ -31,3 +31,6 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Slot and BIB counters live on the events row and change only with single UPDATE statements inside transactions.
 
 - Concurrency tests must be able to fail: after writing one, break the code on purpose and confirm the test goes red. Race tests force overlap (held-lock barrier); they never rely on timing luck.
+
+- Payments: a payment is real only after the server (a) verifies the Razorpay signature with an order ID from our own database, and (b) fetches the payment from Razorpay and checks status 'captured' and amount. Amounts always come from events.fee_paise, never from a request.
+- Razorpay keys: test keys only (rzp_test_...) until a deliberate go-live. Never log or echo secrets.
