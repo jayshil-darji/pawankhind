@@ -15,6 +15,20 @@ function safeEqualHex(expected: string, actual: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function toProviderPayment(raw: unknown): ProviderPayment | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const b = raw as { id?: unknown; order_id?: unknown; amount?: unknown; status?: unknown };
+  if (
+    typeof b.id !== "string" ||
+    typeof b.order_id !== "string" ||
+    typeof b.amount !== "number" ||
+    typeof b.status !== "string"
+  ) {
+    return null;
+  }
+  return { id: b.id, orderId: b.order_id, amountPaise: b.amount, status: b.status };
+}
+
 export class RazorpayProvider implements PaymentProvider {
   constructor(
     private readonly config: RazorpayConfig,
@@ -75,25 +89,35 @@ export class RazorpayProvider implements PaymentProvider {
   }
 
   async fetchPayment(paymentId: string): Promise<ProviderPayment> {
-    const body = (await this.call(`/payments/${encodeURIComponent(paymentId)}`)) as {
-      id?: unknown;
-      order_id?: unknown;
-      amount?: unknown;
-      status?: unknown;
-    };
-    if (
-      typeof body.id !== "string" ||
-      typeof body.order_id !== "string" ||
-      typeof body.amount !== "number" ||
-      typeof body.status !== "string"
-    ) {
-      throw new Error("Razorpay payment response had an unexpected shape");
-    }
-    return { id: body.id, orderId: body.order_id, amountPaise: body.amount, status: body.status };
+    const payment = toProviderPayment(
+      await this.call(`/payments/${encodeURIComponent(paymentId)}`),
+    );
+    if (!payment) throw new Error("Razorpay payment response had an unexpected shape");
+    return payment;
   }
 
   verifyWebhookSignature(rawBody: string | Buffer, signature: string): boolean {
     const expected = createHmac("sha256", this.config.webhookSecret).update(rawBody).digest("hex");
     return safeEqualHex(expected, signature);
+  }
+
+  async listPayments(input: { fromUnix: number; toUnix: number }): Promise<ProviderPayment[]> {
+    const PAGE = 100;
+    const MAX_PAGES = 20;
+    const payments: ProviderPayment[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const body = (await this.call(
+        `/payments?from=${input.fromUnix}&to=${input.toUnix}&count=${PAGE}&skip=${page * PAGE}`,
+      )) as { items?: unknown };
+      if (!Array.isArray(body.items)) {
+        throw new Error("Razorpay payments list had an unexpected shape");
+      }
+      for (const raw of body.items) {
+        const payment = toProviderPayment(raw); // payments without an order id are skipped
+        if (payment) payments.push(payment);
+      }
+      if (body.items.length < PAGE) break;
+    }
+    return payments;
   }
 }

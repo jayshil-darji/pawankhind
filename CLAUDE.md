@@ -63,3 +63,4 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - Every background job (sweeper, reconciliation) must be wired into a module AND have a test that gets it from the real app (`app.get(...)`) and runs it. A tested function that nothing calls is a bug.
 - Jobs never throw out of their timer callback: catch, log (no secrets), continue.
+- Reconciliation never issues BIBs itself; it only calls the same confirm path as /verify and the webhook.

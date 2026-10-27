@@ -66,6 +66,51 @@ export class PaymentsRepository {
     }
   }
 
+  async findLatestOrder(
+    registrationId: string,
+  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
+    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
+      `SELECT provider_order_id, amount_paise FROM payments
+        WHERE registration_id = $1 AND method = 'razorpay' AND provider_order_id IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [registrationId],
+    );
+    const row = r.rows[0];
+    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
+  }
+
+  async findOrderByProviderOrderId(
+    providerOrderId: string,
+  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
+    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
+      `SELECT provider_order_id, amount_paise FROM payments
+        WHERE provider_order_id = $1 AND method = 'razorpay'`,
+      [providerOrderId],
+    );
+    const row = r.rows[0];
+    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
+  }
+
+  /** Our Razorpay orders whose registration is not confirmed and not already flagged for a human. */
+  async findUnconfirmedOrders(
+    providerOrderIds: string[],
+  ): Promise<{ providerOrderId: string; amountPaise: number }[]> {
+    if (providerOrderIds.length === 0) return [];
+    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
+      `SELECT p.provider_order_id, p.amount_paise
+         FROM payments p JOIN registrations r ON r.id = p.registration_id
+        WHERE p.method = 'razorpay'
+          AND p.provider_order_id = ANY($1::text[])
+          AND r.status <> 'confirmed'
+          AND p.status <> 'captured'`,
+      [providerOrderIds],
+    );
+    return r.rows.map((row) => ({
+      providerOrderId: row.provider_order_id,
+      amountPaise: row.amount_paise,
+    }));
+  }
+
   private confirmInTransaction(input: {
     providerOrderId: string;
     providerPaymentId: string;
@@ -140,30 +185,5 @@ export class PaymentsRepository {
 
       return { ok: true, bib, registrationId: registration.id, alreadyConfirmed: false };
     });
-  }
-
-  async findLatestOrder(
-    registrationId: string,
-  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
-    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
-      `SELECT provider_order_id, amount_paise FROM payments
-        WHERE registration_id = $1 AND method = 'razorpay' AND provider_order_id IS NOT NULL
-        ORDER BY created_at DESC LIMIT 1`,
-      [registrationId],
-    );
-    const row = r.rows[0];
-    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
-  }
-
-  async findOrderByProviderOrderId(
-    providerOrderId: string,
-  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
-    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
-      `SELECT provider_order_id, amount_paise FROM payments
-        WHERE provider_order_id = $1 AND method = 'razorpay'`,
-      [providerOrderId],
-    );
-    const row = r.rows[0];
-    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
   }
 }

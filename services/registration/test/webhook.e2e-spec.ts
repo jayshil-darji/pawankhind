@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Test } from "@nestjs/testing";
+import { Logger } from "@nestjs/common";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import pg from "pg";
 import { AppModule } from "../src/app.module.js";
@@ -37,6 +38,9 @@ class FakeProvider implements PaymentProvider {
     const given = Buffer.from(signature);
     return given.length === expected.length && timingSafeEqual(given, expected);
   }
+  listPayments(): Promise<ProviderPayment[]> {
+    return Promise.resolve([]);
+  }
 }
 
 interface StartBody {
@@ -52,6 +56,8 @@ const fake = new FakeProvider();
 beforeAll(async () => {
   db = await startTestDatabase();
   appPool = new pg.Pool({ connectionString: db.connectionUri });
+  appPool.on("error", () => {});
+
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PG_POOL)
     .useValue(appPool)
@@ -271,5 +277,20 @@ describe("POST /api/webhooks/razorpay", () => {
 
     expect(res.statusCode).toBe(502);
     expect((await statusOf(s.registrationId)).status).toBe("held");
+  });
+
+  it("logs why a webhook was rejected, without leaking the signature or the payment", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => {});
+    try {
+      const forged = "f".repeat(64);
+      await webhook(eventBody("pay_1"), forged);
+
+      const logged = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(logged).toContain("webhook: bad_signature");
+      expect(logged).not.toContain(forged);
+      expect(logged).not.toContain("pay_1");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

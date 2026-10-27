@@ -10,8 +10,11 @@ import { RegistrationsController } from "./registrations.controller.js";
 import { RegistrationsRepository } from "./registrations.repository.js";
 import { WebhookController } from "../payments/webhook.controller.js";
 import { HoldSweeper } from "./hold-sweeper.js";
+import { ReconciliationJob } from "../payments/reconciliation.job.js";
 
 const SWEEP_INTERVAL_MS = 60_000;
+const RECONCILE_INTERVAL_MS = 10 * 60_000;
+const RECONCILE_LOOKBACK_SECONDS = 48 * 3600;
 
 @Module({
   controllers: [RegistrationsController, WebhookController],
@@ -46,6 +49,22 @@ const SWEEP_INTERVAL_MS = 60_000;
       provide: HoldSweeper,
       useFactory: (r: RegistrationsRepository) => new HoldSweeper(r, SWEEP_INTERVAL_MS),
       inject: [RegistrationsRepository],
+    },
+    {
+      provide: ReconciliationJob,
+      useFactory: (
+        flow: RegistrationFlow,
+        payments: PaymentsRepository,
+        provider: PaymentProvider,
+      ) =>
+        new ReconciliationJob(
+          flow,
+          payments,
+          provider,
+          RECONCILE_INTERVAL_MS,
+          RECONCILE_LOOKBACK_SECONDS,
+        ),
+      inject: [RegistrationFlow, PaymentsRepository, PAYMENT_PROVIDER],
     },
   ],
 })
