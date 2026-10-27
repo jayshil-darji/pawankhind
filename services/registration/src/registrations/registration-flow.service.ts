@@ -1,5 +1,6 @@
-import { BadGatewayException, Injectable } from "@nestjs/common";
-import type { PaymentProvider } from "../payments/payment-provider.js";
+import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
+import { z } from "zod";
+import type { PaymentProvider, ProviderPayment } from "../payments/payment-provider.js";
 import type { PaymentsRepository } from "../payments/payments.repository.js";
 import type { ParticipantInput, RegistrationsRepository } from "./registrations.repository.js";
 
@@ -17,8 +18,23 @@ export type VerifyOutcome =
   | { kind: "pending" }
   | { kind: "bad_signature" | "unknown" | "mismatch" | "needs_support" };
 
+export type WebhookOutcome = VerifyOutcome | { kind: "bad_payload" | "ignored" };
+
+const HANDLED_EVENTS = new Set(["payment.captured", "order.paid"]);
+
+const webhookSchema = z.object({
+  event: z.string(),
+  payload: z
+    .object({
+      payment: z.object({ entity: z.object({ id: z.string().min(1) }) }).optional(),
+    })
+    .optional(),
+});
+
 @Injectable()
 export class RegistrationFlow {
+  private readonly log = new Logger(RegistrationFlow.name);
+
   constructor(
     private readonly registrations: RegistrationsRepository,
     private readonly payments: PaymentsRepository,
@@ -72,12 +88,60 @@ export class RegistrationFlow {
     });
     if (!signatureOk) return { kind: "bad_signature" };
 
-    let remote;
+    const remote = await this.fetchRemote(input.paymentId);
+    return this.confirmFetched(order, remote);
+  }
+
+  /** Razorpay -> us. `rawBody` must be the exact bytes received. */
+  async handleWebhook(
+    rawBody: Buffer | undefined,
+    signature: string | undefined,
+  ): Promise<WebhookOutcome> {
+    if (!rawBody || !signature || !this.provider.verifyWebhookSignature(rawBody, signature)) {
+      return { kind: "bad_signature" };
+    }
+
+    let json: unknown;
     try {
-      remote = await this.provider.fetchPayment(input.paymentId);
+      json = JSON.parse(rawBody.toString("utf8"));
+    } catch {
+      return { kind: "bad_payload" };
+    }
+    const parsed = webhookSchema.safeParse(json);
+    if (!parsed.success) return { kind: "bad_payload" };
+
+    const paymentId = parsed.data.payload?.payment?.entity.id;
+    if (!HANDLED_EVENTS.has(parsed.data.event) || !paymentId) return { kind: "ignored" };
+
+    // Trust the Razorpay API, not the webhook body, for order, amount and status.
+    const remote = await this.fetchRemote(paymentId);
+    const order = await this.payments.findOrderByProviderOrderId(remote.orderId);
+    if (!order) {
+      this.log.warn(`webhook for unknown order ${remote.orderId}`);
+      return { kind: "unknown" };
+    }
+
+    const outcome = await this.confirmFetched(order, remote);
+    if (outcome.kind === "needs_support" || outcome.kind === "mismatch") {
+      this.log.error(
+        `payment ${paymentId} on order ${remote.orderId}: ${outcome.kind}, needs a human`,
+      );
+    }
+    return outcome;
+  }
+
+  private async fetchRemote(paymentId: string): Promise<ProviderPayment> {
+    try {
+      return await this.provider.fetchPayment(paymentId);
     } catch {
       throw new BadGatewayException({ code: "provider_unavailable", message: "Please retry." });
     }
+  }
+
+  private async confirmFetched(
+    order: { providerOrderId: string; amountPaise: number },
+    remote: ProviderPayment,
+  ): Promise<VerifyOutcome> {
     if (remote.orderId !== order.providerOrderId || remote.amountPaise !== order.amountPaise) {
       return { kind: "mismatch" };
     }
@@ -85,7 +149,7 @@ export class RegistrationFlow {
 
     const result = await this.payments.confirmOnlinePayment({
       providerOrderId: order.providerOrderId,
-      providerPaymentId: input.paymentId,
+      providerPaymentId: remote.id,
       amountPaise: remote.amountPaise,
     });
     if (result.ok) return { kind: "confirmed", bib: result.bib };

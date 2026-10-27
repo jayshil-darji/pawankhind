@@ -51,3 +51,10 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Never send amounts, order IDs or BIBs from the client. Only participant fields and the Razorpay payment id and signature.
 - Use the shared zod schemas from @pawankhind/schemas for form validation. Never copy rules into the web app.
 - The API is reached through the relative path /api (Vite proxy in dev). No hard-coded URLs or keys.
+
+## Webhook rules
+
+- Webhooks are verified against the RAW request body with a constant-time HMAC compare. Never re-serialise the JSON before checking.
+- A valid signature is not proof of payment: always confirm with the Razorpay API (order, amount, `captured`) before issuing a BIB.
+- Reply codes control retries: 400 for junk, 5xx only when a retry can help, 200 for everything else (log, don't retry).
+- BIBs are still issued only by confirmOnlinePayment. The webhook and /verify share it and must stay idempotent.

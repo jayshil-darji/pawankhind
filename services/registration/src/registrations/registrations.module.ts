@@ -8,9 +8,10 @@ import { RazorpayProvider } from "../payments/razorpay.provider.js";
 import { RegistrationFlow } from "./registration-flow.service.js";
 import { RegistrationsController } from "./registrations.controller.js";
 import { RegistrationsRepository } from "./registrations.repository.js";
+import { WebhookController } from "../payments/webhook.controller.js";
 
 @Module({
-  controllers: [RegistrationsController],
+  controllers: [RegistrationsController, WebhookController],
   providers: [
     {
       provide: RegistrationsRepository,
