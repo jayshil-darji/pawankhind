@@ -58,3 +58,8 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - A valid signature is not proof of payment: always confirm with the Razorpay API (order, amount, `captured`) before issuing a BIB.
 - Reply codes control retries: 400 for junk, 5xx only when a retry can help, 200 for everything else (log, don't retry).
 - BIBs are still issued only by confirmOnlinePayment. The webhook and /verify share it and must stay idempotent.
+
+## Background jobs
+
+- Every background job (sweeper, reconciliation) must be wired into a module AND have a test that gets it from the real app (`app.get(...)`) and runs it. A tested function that nothing calls is a bug.
+- Jobs never throw out of their timer callback: catch, log (no secrets), continue.

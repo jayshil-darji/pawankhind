@@ -9,6 +9,9 @@ import { RegistrationFlow } from "./registration-flow.service.js";
 import { RegistrationsController } from "./registrations.controller.js";
 import { RegistrationsRepository } from "./registrations.repository.js";
 import { WebhookController } from "../payments/webhook.controller.js";
+import { HoldSweeper } from "./hold-sweeper.js";
+
+const SWEEP_INTERVAL_MS = 60_000;
 
 @Module({
   controllers: [RegistrationsController, WebhookController],
@@ -38,6 +41,11 @@ import { WebhookController } from "../payments/webhook.controller.js";
       useFactory: (r: RegistrationsRepository, p: PaymentsRepository, provider: PaymentProvider) =>
         new RegistrationFlow(r, p, provider),
       inject: [RegistrationsRepository, PaymentsRepository, PAYMENT_PROVIDER],
+    },
+    {
+      provide: HoldSweeper,
+      useFactory: (r: RegistrationsRepository) => new HoldSweeper(r, SWEEP_INTERVAL_MS),
+      inject: [RegistrationsRepository],
     },
   ],
 })

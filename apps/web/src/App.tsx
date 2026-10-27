@@ -24,7 +24,7 @@ function messageFor(e: ApiError): string {
   if (e.code === "closed" || e.code === "no_event") return "Registration is not open right now.";
   if (e.code === "sold_out") return "Sorry, all places are taken.";
   if (e.code === "already_registered")
-    return "This person is already registered, or a payment is in progress. If you just closed the payment window, please wait 15 minutes and try again.";
+    return "This person is already registered, or a payment is in progress. If you just closed the payment window, please wait 10 minutes and try again.";
   if (e.httpStatus === 409) return "A registration with these details already exists.";
   if (e.httpStatus === 502) return "The payment service is unavailable. Please try again shortly.";
   return "Something went wrong. Please try again.";
