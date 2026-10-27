@@ -9,9 +9,13 @@ export type StartResult =
       ok: true;
       registrationId: string;
       holdExpiresAt: Date;
+      resumed: boolean;
       order: { orderId: string; amountPaise: number; currency: "INR" };
     }
-  | { ok: false; reason: "sold_out" | "closed" | "already_registered" | "no_event" };
+  | {
+      ok: false;
+      reason: "sold_out" | "closed" | "already_registered" | "no_event" | "setup_in_progress";
+    };
 
 export type VerifyOutcome =
   | { kind: "confirmed"; bib: number }
@@ -45,7 +49,15 @@ export class RegistrationFlow {
     const event = await this.registrations.getCurrentEvent();
     if (!event) return { ok: false, reason: "no_event" };
 
-    const reserved = await this.registrations.reserveSlot(event.id, participant);
+    let reserved = await this.registrations.reserveSlot(event.id, participant);
+    if (!reserved.ok && reserved.reason === "already_registered") {
+      const live = await this.registrations.findLiveHold(event.id, participant);
+      if (live) return this.resume(live);
+      // Their earlier hold may have expired without being swept yet: sweep once and retry.
+      if ((await this.registrations.releaseExpiredHolds()) > 0) {
+        reserved = await this.registrations.reserveSlot(event.id, participant);
+      }
+    }
     if (!reserved.ok) return reserved;
 
     try {
@@ -65,6 +77,7 @@ export class RegistrationFlow {
         ok: true,
         registrationId: reserved.registrationId,
         holdExpiresAt: reserved.holdExpiresAt,
+        resumed: false,
         order: { orderId: order.orderId, amountPaise: intent.amountPaise, currency: "INR" },
       };
     } catch {
@@ -101,6 +114,26 @@ export class RegistrationFlow {
       outcome.kind === "bad_signature" || outcome.kind === "bad_payload" ? "warn" : "log";
     this.log[level](`webhook: ${outcome.kind}`);
     return outcome;
+  }
+
+  async confirmFetched(
+    order: { providerOrderId: string; amountPaise: number },
+    remote: ProviderPayment,
+  ): Promise<VerifyOutcome> {
+    if (remote.orderId !== order.providerOrderId || remote.amountPaise !== order.amountPaise) {
+      return { kind: "mismatch" };
+    }
+    if (remote.status !== "captured") return { kind: "pending" };
+
+    const result = await this.payments.confirmOnlinePayment({
+      providerOrderId: order.providerOrderId,
+      providerPaymentId: remote.id,
+      amountPaise: remote.amountPaise,
+    });
+    if (result.ok) return { kind: "confirmed", bib: result.bib };
+    if (result.reason === "unknown_order") return { kind: "unknown" };
+    if (result.reason === "amount_mismatch") return { kind: "mismatch" };
+    return { kind: "needs_support" };
   }
 
   /** Razorpay -> us. `rawBody` must be the exact bytes received. */
@@ -152,23 +185,23 @@ export class RegistrationFlow {
     }
   }
 
-  async confirmFetched(
-    order: { providerOrderId: string; amountPaise: number },
-    remote: ProviderPayment,
-  ): Promise<VerifyOutcome> {
-    if (remote.orderId !== order.providerOrderId || remote.amountPaise !== order.amountPaise) {
-      return { kind: "mismatch" };
-    }
-    if (remote.status !== "captured") return { kind: "pending" };
-
-    const result = await this.payments.confirmOnlinePayment({
-      providerOrderId: order.providerOrderId,
-      providerPaymentId: remote.id,
-      amountPaise: remote.amountPaise,
-    });
-    if (result.ok) return { kind: "confirmed", bib: result.bib };
-    if (result.reason === "unknown_order") return { kind: "unknown" };
-    if (result.reason === "amount_mismatch") return { kind: "mismatch" };
-    return { kind: "needs_support" };
+  private async resume(live: {
+    registrationId: string;
+    holdExpiresAt: Date;
+  }): Promise<StartResult> {
+    const order = await this.payments.findLatestOrder(live.registrationId);
+    // No order yet: the first request is still setting up its payment. Never create a second.
+    if (!order) return { ok: false, reason: "setup_in_progress" };
+    return {
+      ok: true,
+      registrationId: live.registrationId,
+      holdExpiresAt: live.holdExpiresAt,
+      resumed: true,
+      order: {
+        orderId: order.providerOrderId,
+        amountPaise: order.amountPaise,
+        currency: "INR",
+      },
+    };
   }
 }

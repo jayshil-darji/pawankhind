@@ -134,4 +134,20 @@ export class RegistrationsRepository {
     const row = r.rows[0];
     return row ? { status: row.status, bib: row.bib_number } : null;
   }
+
+  /** The person's own hold, if it is still live. Matches the "one active per person" index. */
+  async findLiveHold(
+    eventId: string,
+    p: ParticipantInput,
+  ): Promise<{ registrationId: string; holdExpiresAt: Date } | null> {
+    const r = await this.pool.query<{ id: string; hold_expires_at: Date }>(
+      `SELECT id, hold_expires_at FROM registrations
+        WHERE event_id = $1 AND status = 'held' AND hold_expires_at > now()
+          AND mobile = $2 AND lower(btrim(full_name)) = lower(btrim($3))
+          AND date_of_birth = $4`,
+      [eventId, p.mobile, p.fullName, p.dateOfBirth],
+    );
+    const row = r.rows[0];
+    return row ? { registrationId: row.id, holdExpiresAt: row.hold_expires_at } : null;
+  }
 }

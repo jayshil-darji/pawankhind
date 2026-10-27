@@ -44,6 +44,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - BIBs are issued only inside confirmOnlinePayment, in one transaction. No other code path may assign a BIB.
 - Never log secrets, signatures or full request bodies.
 - Every endpoint validates input with the zod schemas in @pawankhind/schemas.
+- One registration has at most one payment order. Resume reuses it; nothing else may create a second. A second payment for a confirmed registration is recorded and flagged, never given a BIB.
 
 ## Web app rules
 
