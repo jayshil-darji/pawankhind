@@ -5,6 +5,7 @@ import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 
 class FakeProvider implements PaymentProvider {
   failCreate = false;
@@ -200,5 +201,25 @@ describe("POST /api/payments/verify", () => {
   it("answers 404 for an unknown registration", async () => {
     const res = await verify("11111111-1111-4111-8111-111111111111", "order_x", "pay_1");
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("hold sweeper", () => {
+  it("is wired into the app and frees expired holds", async () => {
+    const started = (await startRegistration(1)).json<StartBody>();
+    await db.pool.query(
+      "UPDATE registrations SET hold_expires_at = now() - interval '1 minute' WHERE id = $1",
+      [started.registrationId],
+    );
+
+    const released = await app.get(HoldSweeper).tick();
+
+    expect(released).toBe(1);
+    expect(await slotsTaken()).toBe(0);
+    const status = await app.inject({
+      method: "GET",
+      url: `/api/registrations/${started.registrationId}/status`,
+    });
+    expect(status.json()).toEqual({ status: "expired" });
   });
 });
