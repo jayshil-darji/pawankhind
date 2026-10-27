@@ -23,6 +23,7 @@ COPY services/registration/package.json services/registration/
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=build /app/packages/schemas/dist packages/schemas/dist
 COPY --from=build /app/services/registration/dist services/registration/dist
+COPY services/registration/migrations services/registration/migrations
 USER node
 WORKDIR /app/services/registration
 EXPOSE 3001

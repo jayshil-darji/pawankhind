@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pawankhind
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ser POSTGRES_PASSWORD_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD_PASSWORD in .env}
       POSTGRES_DB: registration
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -36,6 +36,9 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: "3001"
       HOST: 0.0.0.0
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?missing RAZORPAY_KEY_ID in .env}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:?missing RAZORPAY_KEY_SECRET in .env}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:?missing RAZORPAY_WEBHOOK_SECRET in .env}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
