@@ -128,3 +128,61 @@ describe("createOrder and fetchPayment", () => {
     await expect(provider(bad).fetchPayment("pay_1")).rejects.toThrow("unexpected shape");
   });
 });
+
+describe("listPayments", () => {
+  const item = (id: string, order: string | null) => ({
+    id,
+    order_id: order,
+    amount: 20000,
+    status: "captured",
+  });
+  const respond = (items: unknown[]) =>
+    new Response(JSON.stringify({ entity: "collection", count: items.length, items }), {
+      status: 200,
+    });
+
+  it("maps payments, skips ones without an order, and sends the time window", async () => {
+    const urls: string[] = [];
+    const fake = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(respond([item("pay_1", "order_1"), item("pay_2", null)]));
+    }) as unknown as typeof fetch;
+
+    const result = await provider(fake).listPayments({ fromUnix: 1000, toUnix: 2000 });
+
+    expect(result).toEqual([
+      { id: "pay_1", orderId: "order_1", amountPaise: 20000, status: "captured" },
+    ]);
+    expect(urls).toEqual([
+      "https://api.razorpay.com/v1/payments?from=1000&to=2000&count=100&skip=0",
+    ]);
+  });
+
+  it("keeps paging until it gets a short page", async () => {
+    const pages = [
+      Array.from({ length: 100 }, (_, i) => item(`pay_${i}`, `order_${i}`)),
+      [item("pay_last", "order_last")],
+    ];
+    const urls: string[] = [];
+    const fake = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(respond(pages[urls.length - 1]));
+    }) as unknown as typeof fetch;
+
+    const result = await provider(fake).listPayments({ fromUnix: 1, toUnix: 2 });
+
+    expect(result).toHaveLength(101);
+    expect(urls[1]).toContain("skip=100");
+  });
+
+  it("fails on a response that is not a list", async () => {
+    const fake = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ nope: true }), { status: 200 }),
+      )) as unknown as typeof fetch;
+
+    await expect(provider(fake).listPayments({ fromUnix: 1, toUnix: 2 })).rejects.toThrow(
+      "unexpected shape",
+    );
+  });
+});

@@ -6,11 +6,14 @@ import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/token
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import { person, startTestDatabase, TestDatabase } from "./support/database.js";
 import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
+import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 
 class FakeProvider implements PaymentProvider {
   failCreate = false;
   remoteStatus = "captured";
   remoteAmountDelta = 0;
+  listed: ProviderPayment[] = [];
+
   private count = 0;
   private last = { orderId: "", amountPaise: 0 };
 
@@ -18,6 +21,7 @@ class FakeProvider implements PaymentProvider {
     this.failCreate = false;
     this.remoteStatus = "captured";
     this.remoteAmountDelta = 0;
+    this.listed = [];
   }
   createOrder(input: { amountPaise: number }) {
     if (this.failCreate) return Promise.reject(new Error("provider down"));
@@ -38,6 +42,10 @@ class FakeProvider implements PaymentProvider {
   }
   verifyWebhookSignature() {
     return true;
+  }
+
+  listPayments(): Promise<ProviderPayment[]> {
+    return Promise.resolve(this.listed);
   }
 }
 
@@ -221,5 +229,23 @@ describe("hold sweeper", () => {
       url: `/api/registrations/${started.registrationId}/status`,
     });
     expect(status.json()).toEqual({ status: "expired" });
+  });
+});
+
+describe("reconciliation job", () => {
+  it("is wired into the app and confirms a payment nobody reported", async () => {
+    const started = (await startRegistration(1)).json<StartBody>();
+    fake.listed = [
+      { id: "pay_1", orderId: started.checkout.orderId, amountPaise: 20000, status: "captured" },
+    ];
+
+    const result = await app.get(ReconciliationJob).tick();
+
+    expect(result).toEqual({ confirmed: 1, needsHuman: 0 });
+    const status = await app.inject({
+      method: "GET",
+      url: `/api/registrations/${started.registrationId}/status`,
+    });
+    expect(status.json()).toEqual({ status: "confirmed", bib: 1001 });
   });
 });

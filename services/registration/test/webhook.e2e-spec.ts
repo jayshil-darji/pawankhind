@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Test } from "@nestjs/testing";
+import { Logger } from "@nestjs/common";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import pg from "pg";
 import { AppModule } from "../src/app.module.js";
@@ -36,6 +37,9 @@ class FakeProvider implements PaymentProvider {
     const expected = Buffer.from(sign(Buffer.from(rawBody).toString("utf8")));
     const given = Buffer.from(signature);
     return given.length === expected.length && timingSafeEqual(given, expected);
+  }
+  listPayments(): Promise<ProviderPayment[]> {
+    return Promise.resolve([]);
   }
 }
 
@@ -271,5 +275,20 @@ describe("POST /api/webhooks/razorpay", () => {
 
     expect(res.statusCode).toBe(502);
     expect((await statusOf(s.registrationId)).status).toBe("held");
+  });
+
+  it("logs why a webhook was rejected, without leaking the signature or the payment", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => {});
+    try {
+      const forged = "f".repeat(64);
+      await webhook(eventBody("pay_1"), forged);
+
+      const logged = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(logged).toContain("webhook: bad_signature");
+      expect(logged).not.toContain(forged);
+      expect(logged).not.toContain("pay_1");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

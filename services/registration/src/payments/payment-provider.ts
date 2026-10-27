@@ -23,4 +23,7 @@ export interface PaymentProvider {
 
   /** Verifies a webhook against the RAW request body. */
   verifyWebhookSignature(rawBody: string | Buffer, signature: string): boolean;
+
+  /** Payments created in [fromUnix, toUnix] that carry an order id. Used to catch missed webhooks. */
+  listPayments(input: { fromUnix: number; toUnix: number }): Promise<ProviderPayment[]>;
 }

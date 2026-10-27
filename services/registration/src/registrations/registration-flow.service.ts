@@ -92,8 +92,19 @@ export class RegistrationFlow {
     return this.confirmFetched(order, remote);
   }
 
-  /** Razorpay -> us. `rawBody` must be the exact bytes received. */
   async handleWebhook(
+    rawBody: Buffer | undefined,
+    signature: string | undefined,
+  ): Promise<WebhookOutcome> {
+    const outcome = await this.processWebhook(rawBody, signature);
+    const level =
+      outcome.kind === "bad_signature" || outcome.kind === "bad_payload" ? "warn" : "log";
+    this.log[level](`webhook: ${outcome.kind}`);
+    return outcome;
+  }
+
+  /** Razorpay -> us. `rawBody` must be the exact bytes received. */
+  private async processWebhook(
     rawBody: Buffer | undefined,
     signature: string | undefined,
   ): Promise<WebhookOutcome> {
@@ -133,12 +144,15 @@ export class RegistrationFlow {
   private async fetchRemote(paymentId: string): Promise<ProviderPayment> {
     try {
       return await this.provider.fetchPayment(paymentId);
-    } catch {
+    } catch (error) {
+      this.log.warn(
+        `razorpay api call failed for payment ${paymentId}: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
       throw new BadGatewayException({ code: "provider_unavailable", message: "Please retry." });
     }
   }
 
-  private async confirmFetched(
+  async confirmFetched(
     order: { providerOrderId: string; amountPaise: number },
     remote: ProviderPayment,
   ): Promise<VerifyOutcome> {
