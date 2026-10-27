@@ -15,7 +15,11 @@ export async function startTestDatabase(): Promise<TestDatabase> {
     "postgres:17",
   ).start();
   const pool = new pg.Pool({ connectionString: container.getConnectionUri(), max: 20 });
+  pool.on("error", () => {
+    // During teardown the server may tell idle clients it is going away. Not a test failure.
+  });
   const dir = join(import.meta.dirname, "../../migrations");
+
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort()) {

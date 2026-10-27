@@ -62,6 +62,8 @@ const fake = new FakeProvider();
 beforeAll(async () => {
   db = await startTestDatabase();
   appPool = new pg.Pool({ connectionString: db.connectionUri });
+  appPool.on("error", () => {});
+
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PG_POOL)
     .useValue(appPool)
