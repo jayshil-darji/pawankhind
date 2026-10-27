@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import pg from "pg";
 import { Config } from "../config.js";
-import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL } from "../infra/tokens.js";
+import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../infra/tokens.js";
 import { PaymentsRepository } from "../payments/payments.repository.js";
 import type { PaymentProvider } from "../payments/payment-provider.js";
 import { RazorpayProvider } from "../payments/razorpay.provider.js";
@@ -11,6 +11,7 @@ import { RegistrationsRepository } from "./registrations.repository.js";
 import { WebhookController } from "../payments/webhook.controller.js";
 import { HoldSweeper } from "./hold-sweeper.js";
 import { ReconciliationJob } from "../payments/reconciliation.job.js";
+import { RateLimiter, RedisEval } from "../infra/rate-limiter.js";
 
 const SWEEP_INTERVAL_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 10 * 60_000;
@@ -65,6 +66,11 @@ const RECONCILE_LOOKBACK_SECONDS = 48 * 3600;
           RECONCILE_LOOKBACK_SECONDS,
         ),
       inject: [RegistrationFlow, PaymentsRepository, PAYMENT_PROVIDER],
+    },
+    {
+      provide: RateLimiter,
+      useFactory: (redis: RedisEval) => new RateLimiter(redis),
+      inject: [REDIS],
     },
   ],
 })

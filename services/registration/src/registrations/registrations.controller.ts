@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseGuards,
 } from "@nestjs/common";
 import { participantSchema, registrationIdSchema, verifyPaymentSchema } from "@pawankhind/schemas";
 import type { z } from "zod";
@@ -16,6 +17,7 @@ import { APP_CONFIG } from "../infra/tokens.js";
 import type { Config } from "../config.js";
 import { RegistrationFlow } from "./registration-flow.service.js";
 import { RegistrationsRepository } from "./registrations.repository.js";
+import { LIMITS, RateLimit, RateLimitGuard } from "../infra/rate-limit.js";
 
 function parse<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);
@@ -28,6 +30,7 @@ function parse<T>(schema: z.ZodType<T>, data: unknown): T {
   return result.data;
 }
 
+@UseGuards(RateLimitGuard)
 @Controller("api")
 export class RegistrationsController {
   constructor(
@@ -37,6 +40,7 @@ export class RegistrationsController {
   ) {}
 
   @Post("registrations")
+  @RateLimit(LIMITS.start)
   async start(@Body() body: unknown) {
     const participant = parse(participantSchema, body);
     const result = await this.flow.start(participant);
@@ -60,6 +64,7 @@ export class RegistrationsController {
 
   @Post("payments/verify")
   @HttpCode(200)
+  @RateLimit(LIMITS.verify)
   async verify(@Body() body: unknown) {
     const input = parse(verifyPaymentSchema, body);
     const outcome = await this.flow.verify({
@@ -92,6 +97,7 @@ export class RegistrationsController {
   }
 
   @Get("registrations/:id/status")
+  @RateLimit(LIMITS.status)
   async status(@Param("id") id: string) {
     const parsed = registrationIdSchema.safeParse(id);
     if (!parsed.success) throw new NotFoundException();

@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import { PaymentsRepository } from "../src/payments/payments.repository.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
@@ -157,5 +158,20 @@ describe("ReconciliationJob", () => {
     listFails = true;
 
     await expect(job().tick()).resolves.toEqual({ confirmed: 0, needsHuman: 0 });
+  });
+
+  it("logs a one-line summary for every pass", async () => {
+    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => {});
+    try {
+      await startPayment(1, "order_1");
+      listed = [captured("pay_1", "order_1"), captured("pay_2", "order_other")];
+
+      await job().tick();
+
+      const logged = log.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(logged).toContain("2 captured payment(s) listed, 1 awaiting confirmation");
+    } finally {
+      log.mockRestore();
+    }
   });
 });
