@@ -154,4 +154,16 @@ export class PaymentsRepository {
     const row = r.rows[0];
     return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
   }
+
+  async findOrderByProviderOrderId(
+    providerOrderId: string,
+  ): Promise<{ providerOrderId: string; amountPaise: number } | null> {
+    const r = await this.pool.query<{ provider_order_id: string; amount_paise: number }>(
+      `SELECT provider_order_id, amount_paise FROM payments
+        WHERE provider_order_id = $1 AND method = 'razorpay'`,
+      [providerOrderId],
+    );
+    const row = r.rows[0];
+    return row ? { providerOrderId: row.provider_order_id, amountPaise: row.amount_paise } : null;
+  }
 }

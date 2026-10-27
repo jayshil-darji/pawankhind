@@ -10,6 +10,9 @@ async function bootstrap() {
     new FastifyAdapter({
       bodyLimit: 16 * 1024,
     }),
+    {
+      rawBody: true,
+    },
   );
   app.enableShutdownHooks();
 
