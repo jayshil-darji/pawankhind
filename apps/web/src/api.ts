@@ -13,6 +13,7 @@ export interface StartResponse {
   registrationId: string;
   holdExpiresAt: string;
   checkout: CheckoutDetails;
+  resumed: boolean;
 }
 export type VerifyResponse = { status: "confirmed"; bib: number } | { status: "pending" };
 

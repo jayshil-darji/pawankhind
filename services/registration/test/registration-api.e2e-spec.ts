@@ -138,9 +138,12 @@ describe("POST /api/registrations", () => {
     expect(await slotsTaken()).toBe(0);
   });
 
-  it("answers 409 for a duplicate person without leaking a slot", async () => {
-    await startRegistration(1);
+  it("answers 409 for a person who is already confirmed, without leaking a slot", async () => {
+    const first = (await startRegistration(1)).json<StartBody>();
+    await verify(first.registrationId, first.checkout.orderId, "pay_1");
+
     const again = await startRegistration(1);
+
     expect(again.statusCode).toBe(409);
     expect(again.json<{ code: string }>().code).toBe("already_registered");
     expect(await slotsTaken()).toBe(1);
@@ -249,5 +252,72 @@ describe("reconciliation job", () => {
       url: `/api/registrations/${started.registrationId}/status`,
     });
     expect(status.json()).toEqual({ status: "confirmed", bib: 1001 });
+  });
+});
+
+describe("starting again while a hold is live", () => {
+  type Started = StartBody & { resumed: boolean };
+
+  it("returns the same registration and order instead of an error", async () => {
+    const first = (await startRegistration(1)).json<Started>();
+    expect(first.resumed).toBe(false);
+
+    const again = await startRegistration(1);
+
+    expect(again.statusCode).toBe(201);
+    const body = again.json<Started>();
+    expect(body.registrationId).toBe(first.registrationId);
+    expect(body.checkout.orderId).toBe(first.checkout.orderId);
+    expect(body.resumed).toBe(true);
+    expect(await slotsTaken()).toBe(1);
+  });
+
+  it("matches the name ignoring case and extra spaces", async () => {
+    const first = (await startRegistration(1)).json<Started>();
+
+    const again = (
+      await startRegistration(1, { ...person(1), fullName: "  RUNNER 1 " })
+    ).json<Started>();
+
+    expect(again.registrationId).toBe(first.registrationId);
+    expect(again.resumed).toBe(true);
+  });
+
+  it("treats a different name on the same phone as a different person", async () => {
+    const first = (await startRegistration(1)).json<Started>();
+
+    const other = (
+      await startRegistration(1, { ...person(1), fullName: "Someone Else" })
+    ).json<Started>();
+
+    expect(other.registrationId).not.toBe(first.registrationId);
+    expect(other.resumed).toBe(false);
+    expect(await slotsTaken()).toBe(2);
+  });
+
+  it("starts fresh when the earlier hold expired but was not swept yet", async () => {
+    const first = (await startRegistration(1)).json<Started>();
+    await db.pool.query(
+      "UPDATE registrations SET hold_expires_at = now() - interval '1 minute' WHERE id = $1",
+      [first.registrationId],
+    );
+
+    const again = (await startRegistration(1)).json<Started>();
+
+    expect(again.registrationId).not.toBe(first.registrationId);
+    expect(again.resumed).toBe(false);
+    expect(await slotsTaken()).toBe(1);
+  });
+
+  it("does not create a second order while the first request is still setting up", async () => {
+    const first = (await startRegistration(1)).json<Started>();
+    await db.pool.query("DELETE FROM payments WHERE registration_id = $1", [first.registrationId]);
+
+    const again = await startRegistration(1);
+
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ code: string }>().code).toBe("setup_in_progress");
+    const orders = await db.pool.query<{ n: string }>("SELECT count(*) AS n FROM payments");
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 });

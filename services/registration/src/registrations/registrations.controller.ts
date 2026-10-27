@@ -48,6 +48,7 @@ export class RegistrationsController {
     return {
       registrationId: result.registrationId,
       holdExpiresAt: result.holdExpiresAt,
+      resumed: result.resumed,
       checkout: {
         keyId: this.config.RAZORPAY_KEY_ID,
         orderId: result.order.orderId,

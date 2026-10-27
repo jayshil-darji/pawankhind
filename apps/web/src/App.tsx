@@ -23,8 +23,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function messageFor(e: ApiError): string {
   if (e.code === "closed" || e.code === "no_event") return "Registration is not open right now.";
   if (e.code === "sold_out") return "Sorry, all places are taken.";
-  if (e.code === "already_registered")
-    return "This person is already registered, or a payment is in progress. If you just closed the payment window, please wait 10 minutes and try again.";
+  if (e.code === "already_registered") return "This person is already registered.";
+  if (e.code === "setup_in_progress")
+    return "Your registration is being set up. Please try again in a few seconds.";
   if (e.httpStatus === 409) return "A registration with these details already exists.";
   if (e.httpStatus === 502) return "The payment service is unavailable. Please try again shortly.";
   return "Something went wrong. Please try again.";
@@ -93,6 +94,8 @@ export default function App() {
     try {
       const start = await startRegistration(participant);
       await pay(start, participant);
+      if (start.resumed)
+        setBanner("Your earlier registration is still being held. Continuing with payment.");
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === "invalid_request") return e.issues;

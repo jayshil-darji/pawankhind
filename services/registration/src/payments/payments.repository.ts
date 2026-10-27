@@ -141,6 +141,18 @@ export class PaymentsRepository {
         };
       }
 
+      if (registration.status === "confirmed") {
+        // A different payment for a registration that already has its BIB: keep the money
+        // on record, flag it for a human, and never touch the BIB.
+        await client.query(
+          `UPDATE payments
+              SET status = 'captured', provider_payment_id = $2, captured_at = now()
+            WHERE id = $1`,
+          [payment.id, input.providerPaymentId],
+        );
+        return { ok: false, reason: "duplicate_registration" };
+      }
+
       if (input.amountPaise !== payment.amount_paise) {
         return { ok: false, reason: "amount_mismatch" };
       }
