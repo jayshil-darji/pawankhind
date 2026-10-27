@@ -65,3 +65,9 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Every background job (sweeper, reconciliation) must be wired into a module AND have a test that gets it from the real app (`app.get(...)`) and runs it. A tested function that nothing calls is a bug.
 - Jobs never throw out of their timer callback: catch, log (no secrets), continue.
 - Reconciliation never issues BIBs itself; it only calls the same confirm path as /verify and the webhook.
+
+## Public endpoints
+
+- Every public endpoint under /api has a RateLimit rule, except the webhook (Razorpay must never be throttled).
+- Rate limiting fails open (log, allow). It protects us; it must never be the reason registrations stop.
+- Never trust X-Forwarded-For unless TRUST_PROXY=true, which is only for a trusted proxy in front of the app.

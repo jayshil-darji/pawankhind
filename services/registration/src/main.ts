@@ -9,6 +9,7 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({
       bodyLimit: 16 * 1024,
+      trustProxy: config.TRUST_PROXY,
     }),
     {
       rawBody: true,

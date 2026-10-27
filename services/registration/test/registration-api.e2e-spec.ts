@@ -7,6 +7,8 @@ import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-p
 import { person, startTestDatabase, TestDatabase } from "./support/database.js";
 import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
+import { FakeRedis } from "./support/fake-redis.js";
+import { LIMITS } from "../src/infra/rate-limit.js";
 
 class FakeProvider implements PaymentProvider {
   failCreate = false;
@@ -58,6 +60,7 @@ let db: TestDatabase;
 let appPool: pg.Pool;
 let app: NestFastifyApplication;
 const fake = new FakeProvider();
+const fakeRedis = new FakeRedis();
 
 beforeAll(async () => {
   db = await startTestDatabase();
@@ -68,7 +71,7 @@ beforeAll(async () => {
     .overrideProvider(PG_POOL)
     .useValue(appPool)
     .overrideProvider(REDIS)
-    .useValue({ ping: () => Promise.resolve("PONG"), disconnect: () => {} })
+    .useValue(fakeRedis)
     .overrideProvider(APP_CONFIG)
     .useValue({ RAZORPAY_KEY_ID: "rzp_test_fake" })
     .overrideProvider(PAYMENT_PROVIDER)
@@ -85,6 +88,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  fakeRedis.reset();
   fake.reset();
   await db.pool.query("DELETE FROM payments");
   await db.pool.query("DELETE FROM registrations");
@@ -319,5 +323,32 @@ describe("starting again while a hold is live", () => {
     expect(again.json<{ code: string }>().code).toBe("setup_in_progress");
     const orders = await db.pool.query<{ n: string }>("SELECT count(*) AS n FROM payments");
     expect(Number(orders.rows[0].n)).toBe(0);
+  });
+});
+
+describe("rate limiting", () => {
+  it("answers 429 with Retry-After once one address sends too many registrations", async () => {
+    for (let i = 0; i < LIMITS.start.limit; i++) {
+      expect((await startRegistration(1, {})).statusCode).toBe(400);
+    }
+
+    const blocked = await startRegistration(1, {});
+
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json<{ code: string }>().code).toBe("rate_limited");
+    expect(Number(blocked.headers["retry-after"])).toBeGreaterThan(0);
+  });
+
+  it("counts each address separately", async () => {
+    for (let i = 0; i <= LIMITS.start.limit; i++) await startRegistration(1, {});
+
+    const other = await app.inject({
+      method: "POST",
+      url: "/api/registrations",
+      payload: {},
+      remoteAddress: "10.0.0.2",
+    });
+
+    expect(other.statusCode).toBe(400);
   });
 });

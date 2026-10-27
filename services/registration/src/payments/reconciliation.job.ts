@@ -46,6 +46,9 @@ export class ReconciliationJob implements OnApplicationBootstrap, OnApplicationS
       });
       const captured = listed.filter((p) => p.status === "captured");
       const open = await this.payments.findUnconfirmedOrders(captured.map((p) => p.orderId));
+      this.log.log(
+        `pass: ${captured.length} captured payment(s) listed, ${open.length} awaiting confirmation`,
+      );
       const byOrder = new Map(open.map((o) => [o.providerOrderId, o]));
 
       for (const payment of captured) {
