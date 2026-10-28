@@ -83,3 +83,9 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - src/route.ts is a PLACEHOLDER route. Replace it with one generated from the real GPX before going live.
 - Registration dates in src/event.ts mirror the event row; the server is the authority. Replace them with GET /api/event.
 - The map animation must respect prefers-reduced-motion.
+- Artwork is supplied as files: src/assets/hero._, legend._, gallery/*. Compress to WebP (hero under 300 KB, gallery under 120 KB). Never hotlink images.
+- src/route.ts is a PLACEHOLDER route. Replace it with one generated from the real GPX before going live.
+- Dates in src/event.ts mirror the event row; the server is the authority. RACE_START is a placeholder until the real start time is confirmed.
+- The page never mentions an age limit, and the partners section renders nothing until PARTNER_TIERS has entries.
+- Terms, Privacy and Refund pages state only decided rules. They need an owner/legal review (incl. cancellation and weather) before going live.
+- Fonts are self-hosted (@fontsource). No runtime requests to third-party hosts. No auto-rotating carousels.

@@ -23,16 +23,6 @@ afterEach(() => {
 });
 
 describe("landing page", () => {
-  it("shows the event name and the contact number", () => {
-    renderAt("2026-12-01T10:00:00Z");
-
-    expect(screen.getByRole("heading", { level: 1, name: "Pawankhind" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /9033049847/ })).toHaveAttribute(
-      "href",
-      "tel:+919033049847",
-    );
-  });
-
   it("states the kit collection times and that kits are not given on race day", () => {
     renderAt("2026-12-01T10:00:00Z");
 
@@ -59,5 +49,26 @@ describe("landing page", () => {
 
     expect(screen.getByText(/registration is closed/i)).toBeInTheDocument();
     expect(screen.queryByText("REGISTRATION FORM")).toBeNull();
+  });
+
+  it("shows the event name and links to the contact number", () => {
+    renderAt("2026-12-01T10:00:00Z");
+
+    expect(screen.getByRole("heading", { level: 1, name: "Pawankhind" })).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: /9033049847/ });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link).toHaveAttribute("href", "tel:+919033049847");
+  });
+
+  it("shows the live countdown to race day", () => {
+    renderAt("2026-10-28T10:00:00Z");
+
+    expect(screen.getByRole("timer")).toHaveTextContent("80Days");
+  });
+
+  it("never mentions an age limit", () => {
+    renderAt("2026-12-01T10:00:00Z");
+
+    expect(document.body).not.toHaveTextContent(/age limit|minimum age/i);
   });
 });

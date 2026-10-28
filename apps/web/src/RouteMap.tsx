@@ -28,12 +28,12 @@ export default function RouteMap() {
       role="img"
       aria-label="Map of the 5 km loop, starting and finishing at SK University, Visnagar"
       viewBox={ROUTE.viewBox}
-      className="route-map w-full rounded-2xl bg-stone-100"
+      className="route-map w-full rounded-2xl bg-stone-900"
       data-seen={seen}
     >
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M20 0H0V20" fill="none" stroke="#e7e5e4" strokeWidth="1" />
+          <path d="M20 0H0V20" fill="none" stroke="#292524" strokeWidth="1" />
         </pattern>
       </defs>
       <rect width="400" height="280" fill="url(#grid)" />
@@ -43,7 +43,7 @@ export default function RouteMap() {
         pathLength={1}
         className="route-line"
         fill="none"
-        stroke="#c2410c"
+        stroke="#fb923c"
         strokeWidth={5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -51,7 +51,7 @@ export default function RouteMap() {
 
       {ROUTE.kmMarks.map((m) => (
         <g key={m.km} className="route-km" style={{ "--i": m.km } as CSSProperties}>
-          <circle cx={m.x} cy={m.y} r={9} fill="white" stroke="#c2410c" strokeWidth={2} />
+          <circle cx={m.x} cy={m.y} r={9} fill="#1c1917" stroke="#fb923c" strokeWidth={2} />
           <text
             x={m.x}
             y={m.y}
@@ -59,7 +59,7 @@ export default function RouteMap() {
             dominantBaseline="central"
             fontSize={10}
             fontWeight={700}
-            fill="#7c2d12"
+            fill="#fed7aa"
           >
             {m.km}
           </text>
@@ -79,7 +79,7 @@ export default function RouteMap() {
         y={ROUTE.start.y + 26}
         textAnchor="middle"
         fontSize={11}
-        fill="#44403c"
+        fill="#d6d3d1"
       >
         Start / Finish · SK University
       </text>

@@ -1,23 +1,26 @@
 import { EVENT } from "./event.js";
 
-export default function Hero() {
+export default function Hero({ cta }: { cta: string }) {
   return (
-    <header className="bg-linear-to-br from-orange-600 via-red-800 to-stone-950 px-4 py-20 text-center text-white">
-      <p className="text-sm uppercase tracking-[0.3em] text-orange-200">Visnagar · Season 3</p>
-      <h1 className="mt-3 text-6xl font-extrabold tracking-tight sm:text-8xl">{EVENT.name}</h1>
-      <p className="mt-2 text-2xl font-semibold sm:text-3xl">5 KM Run</p>
-      <p className="mt-6 text-lg">
-        {EVENT.raceDay} · Start and finish at {EVENT.venue}
-      </p>
-      <a
-        href="#register"
-        className="mt-8 inline-block rounded-full bg-white px-8 py-3 font-semibold text-red-900"
-      >
-        Register now
-      </a>
-      <p className="mx-auto mt-12 max-w-md text-xs text-orange-100/80">
-        Inspired by the 300 who ran through the night at Pawan Khind.
-      </p>
+    <header id="top" className="text-white">
+      <div className="mx-auto max-w-6xl px-4 pb-32 pt-16 sm:pt-24 md:pb-44">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-orange-300">
+          Visnagar · Season 3
+        </p>
+        <h1 className="mt-3 font-display text-7xl tracking-wide sm:text-9xl">{EVENT.name}</h1>
+        <p className="font-display text-4xl tracking-wider text-orange-400 sm:text-6xl">5 KM RUN</p>
+        <p className="mt-5 max-w-md text-lg text-stone-200">
+          {EVENT.raceDay} · Start and finish at {EVENT.venue}
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a href="#register" className="rounded-full bg-orange-600 px-7 py-3 font-semibold">
+            {cta}
+          </a>
+          <a href="#info" className="rounded-full border border-white/70 px-7 py-3 font-semibold">
+            Race info
+          </a>
+        </div>
+      </div>
     </header>
   );
 }
