@@ -77,3 +77,9 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - The BIB is shown only when the server status is "confirmed" and a bib is present. Never from browser storage, URL state or a payment callback.
 - The result page lives at /registration/:id and must work on a cold reload. All state comes from GET /api/registrations/:id/status.
 - Polling always has a stop condition (terminal status, unmount, time limit).
+
+## Landing page
+
+- src/route.ts is a PLACEHOLDER route. Replace it with one generated from the real GPX before going live.
+- Registration dates in src/event.ts mirror the event row; the server is the authority. Replace them with GET /api/event.
+- The map animation must respect prefers-reduced-motion.

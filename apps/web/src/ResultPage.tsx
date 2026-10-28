@@ -21,8 +21,8 @@ function ResultView({ id }: { id: string }) {
         <p className="text-sm text-green-800">You are registered. Your BIB number</p>
         <p className="my-2 text-5xl font-bold">{state.bib}</p>
         <p className="text-sm text-slate-600">
-          Collect your kit 15 to 17 January. Carry a photo ID. Keep this page's link to see your BIB
-          again.
+          Kit collection: 15 January, 4 pm to 8 pm, and 16 January, 10 am to 8 pm. Kits are not
+          given on race day. Carry a photo ID. Keep this page's link to see your BIB again.
         </p>
         <Reference id={id} />
       </div>
