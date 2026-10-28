@@ -71,3 +71,9 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Every public endpoint under /api has a RateLimit rule, except the webhook (Razorpay must never be throttled).
 - Rate limiting fails open (log, allow). It protects us; it must never be the reason registrations stop.
 - Never trust X-Forwarded-For unless TRUST_PROXY=true, which is only for a trusted proxy in front of the app.
+
+## Web app: result page
+
+- The BIB is shown only when the server status is "confirmed" and a bib is present. Never from browser storage, URL state or a payment callback.
+- The result page lives at /registration/:id and must work on a cold reload. All state comes from GET /api/registrations/:id/status.
+- Polling always has a stop condition (terminal status, unmount, time limit).
