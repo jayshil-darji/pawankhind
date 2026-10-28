@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import {
   ApiError,
-  getStatus,
   startRegistration,
   verifyPayment,
   type FieldIssue,
@@ -14,11 +14,7 @@ import { RegistrationForm } from "./RegistrationForm.js";
 type View =
   | { kind: "form" }
   | { kind: "payment"; start: StartResponse; participant: ParticipantInput }
-  | { kind: "confirming"; registrationId: string }
-  | { kind: "done"; bib: number }
-  | { kind: "problem"; registrationId: string; message: string };
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  | { kind: "confirming" };
 
 function messageFor(e: ApiError): string {
   if (e.code === "closed" || e.code === "no_event") return "Registration is not open right now.";
@@ -26,49 +22,32 @@ function messageFor(e: ApiError): string {
   if (e.code === "already_registered") return "This person is already registered.";
   if (e.code === "setup_in_progress")
     return "Your registration is being set up. Please try again in a few seconds.";
+  if (e.code === "rate_limited")
+    return "Too many attempts. Please wait a few minutes and try again.";
   if (e.httpStatus === 409) return "A registration with these details already exists.";
   if (e.httpStatus === 502) return "The payment service is unavailable. Please try again shortly.";
   return "Something went wrong. Please try again.";
 }
 
-export default function App() {
+export default function RegisterPage() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>({ kind: "form" });
   const [banner, setBanner] = useState<string | null>(null);
 
-  async function waitForConfirmation(registrationId: string) {
-    for (let i = 0; i < 10; i++) {
-      await sleep(3000);
-      const s = await getStatus(registrationId).catch(() => undefined);
-      if (s?.status === "confirmed" && s.bib !== undefined) {
-        setView({ kind: "done", bib: s.bib });
-        return;
-      }
-    }
-    setView({
-      kind: "problem",
-      registrationId,
-      message:
-        "We have not received confirmation yet. If money was deducted, keep this reference and contact the organisers.",
-    });
-  }
-
   async function finish(registrationId: string, result: PaymentResult) {
-    setView({ kind: "confirming", registrationId });
+    setView({ kind: "confirming" });
+    let supportNotice = false;
     try {
-      const out = await verifyPayment({
+      await verifyPayment({
         registrationId,
         razorpayPaymentId: result.razorpayPaymentId,
         razorpaySignature: result.razorpaySignature,
       });
-      if (out.status === "confirmed") setView({ kind: "done", bib: out.bib });
-      else await waitForConfirmation(registrationId);
     } catch (e) {
-      const message =
-        e instanceof ApiError && e.code === "needs_support"
-          ? "Payment received but registration could not be completed. Contact the organisers with this reference."
-          : "We could not confirm your payment. If money was deducted, contact the organisers with this reference.";
-      setView({ kind: "problem", registrationId, message });
+      // Even if verify failed, go to the result page: the webhook or reconciliation may still confirm.
+      supportNotice = e instanceof ApiError && e.code === "needs_support";
     }
+    void navigate(`/registration/${registrationId}`, { state: { supportNotice } });
   }
 
   async function pay(start: StartResponse, participant: ParticipantInput) {
@@ -93,9 +72,9 @@ export default function App() {
     setBanner(null);
     try {
       const start = await startRegistration(participant);
-      await pay(start, participant);
       if (start.resumed)
         setBanner("Your earlier registration is still being held. Continuing with payment.");
+      await pay(start, participant);
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === "invalid_request") return e.issues;
@@ -108,12 +87,7 @@ export default function App() {
   }
 
   return (
-    <main className="mx-auto max-w-xl px-4 py-8">
-      <h1 className="text-2xl font-bold">Pawankhind Season 3 · 5 KM Run</h1>
-      <p className="mb-6 mt-1 text-sm text-slate-600">
-        Sunday 17 January 2027 · Fee ₹200 · No refunds, no BIB transfer
-      </p>
-
+    <>
       {banner && (
         <p role="alert" className="mb-4 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900">
           {banner}
@@ -138,25 +112,6 @@ export default function App() {
       )}
 
       {view.kind === "confirming" && <p>Confirming your payment… please do not close this page.</p>}
-
-      {view.kind === "done" && (
-        <div className="rounded-lg border border-green-300 bg-green-50 p-6 text-center">
-          <p className="text-sm text-green-800">You are registered. Your BIB number</p>
-          <p className="my-2 text-5xl font-bold">{view.bib}</p>
-          <p className="text-sm text-slate-600">
-            Collect your kit 15 to 17 January. Carry a photo ID.
-          </p>
-        </div>
-      )}
-
-      {view.kind === "problem" && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4">
-          <p>{view.message}</p>
-          <p className="mt-2 text-sm">
-            Reference: <code>{view.registrationId}</code>
-          </p>
-        </div>
-      )}
-    </main>
+    </>
   );
 }
