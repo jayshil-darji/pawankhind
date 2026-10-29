@@ -4,6 +4,9 @@ import { person, resetDatabase, startTestDatabase, TestDatabase } from "./suppor
 let db: TestDatabase;
 let seededEventId: string;
 
+// Spelled out here, not taken from RESET_TABLES, so shortening that list makes a test fail.
+const EMPTIED = ["payments", "registrations", "admin_enrolments", "audit_log", "admin_users"];
+
 async function count(table: string): Promise<number> {
   const { rows } = await db.pool.query<{ n: string }>(`SELECT count(*) AS n FROM ${table}`);
   return Number(rows[0].n);
@@ -35,13 +38,24 @@ describe("resetDatabase", () => {
       [held.registrationId],
     );
 
-    expect(await count("registrations")).toBe(1);
-    expect(await count("payments")).toBe(1);
+    const admin = await db.pool.query<{ id: string }>(
+      "INSERT INTO admin_users (username, display_name, role) VALUES ('kit1', 'Kit', 'kit') RETURNING id",
+    );
+    await db.pool.query(
+      `INSERT INTO admin_enrolments (admin_user_id, token_hash, expires_at)
+       VALUES ($1, decode(repeat('ab', 32), 'hex'), now() + interval '1 day')`,
+      [admin.rows[0].id],
+    );
+    await db.pool.query(
+      "INSERT INTO audit_log (actor_id, actor_kind, action) VALUES ($1, 'user', 'login')",
+      [admin.rows[0].id],
+    );
+
+    for (const table of EMPTIED) expect(await count(table)).toBe(1);
   });
 
   it("removes the previous test's rows and resets the event counters", async () => {
-    expect(await count("registrations")).toBe(0);
-    expect(await count("payments")).toBe(0);
+    for (const table of EMPTIED) expect(await count(table)).toBe(0);
     const { rows } = await db.pool.query<{ slots_taken: number; at_first: boolean }>(
       "SELECT slots_taken, next_bib = first_bib AS at_first FROM events",
     );
@@ -66,6 +80,12 @@ describe("resetDatabase", () => {
     expect(rows).toEqual([{ marked: true }]);
   });
 
+  it("leaves audit_log's TRUNCATE guard switched on", async () => {
+    await expect(db.pool.query("TRUNCATE audit_log")).rejects.toThrow(
+      "audit_log is append-only: TRUNCATE refused",
+    );
+  });
+
   it("fails, rather than cascading, when an unlisted table references a reset table", async () => {
     await db.pool.query(
       "CREATE TABLE stray_child (registration_id uuid REFERENCES registrations (id))",
@@ -74,6 +94,10 @@ describe("resetDatabase", () => {
       await expect(resetDatabase(db.pool, { capacity: 5 })).rejects.toMatchObject({
         code: "0A000",
       });
+      // The failed reset rolled back, so the guard it lifted is on again.
+      await expect(db.pool.query("TRUNCATE audit_log")).rejects.toThrow(
+        "audit_log is append-only: TRUNCATE refused",
+      );
     } finally {
       await db.pool.query("DROP TABLE stray_child");
     }

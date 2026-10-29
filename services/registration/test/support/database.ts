@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { withTransaction } from "../../src/infra/transaction.js";
 import type { ParticipantInput } from "../../src/registrations/registrations.repository.js";
 
 export interface TestDatabase {
@@ -67,19 +68,31 @@ export async function startTestDatabase(options: { upTo?: string } = {}): Promis
 /** Tables emptied between tests. Listed one by one, never "all tables": events keeps its seed
  *  row and environment_state its single row (the live-mode check depends on it). No CASCADE,
  *  so a new table referencing these fails the reset until it is added here on purpose. */
-export const RESET_TABLES = ["payments", "registrations"] as const;
+export const RESET_TABLES = [
+  "payments",
+  "registrations",
+  "admin_enrolments",
+  "audit_log",
+  "admin_users",
+] as const;
 
 /** Empties RESET_TABLES and resets the seeded event's counters and window. TRUNCATE, not
- *  DELETE: row-level BEFORE DELETE guards do not fire on it. Returns the event id. */
+ *  DELETE: row-level BEFORE DELETE guards do not fire on it. audit_log's TRUNCATE guard is
+ *  lifted only inside this transaction, so a failed reset rolls back with the guard still on.
+ *  Returns the event id. */
 export async function resetDatabase(pool: pg.Pool, event: { capacity: number }): Promise<string> {
-  await pool.query(`TRUNCATE ${RESET_TABLES.join(", ")} RESTART IDENTITY`);
-  const { rows } = await pool.query<{ id: string }>(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = $1,
-       reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'
-     RETURNING id`,
-    [event.capacity],
-  );
-  return rows[0].id;
+  return withTransaction(pool, async (client) => {
+    await client.query("ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_truncate");
+    await client.query(`TRUNCATE ${RESET_TABLES.join(", ")} RESTART IDENTITY`);
+    await client.query("ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_truncate");
+    const { rows } = await client.query<{ id: string }>(
+      `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = $1,
+         reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'
+       RETURNING id`,
+      [event.capacity],
+    );
+    return rows[0].id;
+  });
 }
 
 /** Inserts a registration directly (no app code), so schema tests can set any status. Confirmed

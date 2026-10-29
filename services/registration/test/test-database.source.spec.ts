@@ -45,6 +45,24 @@ describe("test database rules (source check)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("switches triggers off only in resetDatabase", () => {
+    const offenders = [...srcFiles, ...testFiles]
+      .filter((f) =>
+        /\bDISABLE\s+TRIGGER\b|\bsession_replication_role\b/i.test(withoutComments(f.text)),
+      )
+      .map((f) => f.path);
+
+    expect(offenders).toEqual(["test/support/database.ts"]);
+  });
+
+  it("never UPDATEs audit_log in the app", () => {
+    const offenders = srcFiles
+      .filter((f) => /\bUPDATE\s+audit_log\b/i.test(withoutComments(f.text)))
+      .map((f) => f.path);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("never TRUNCATEs in the app", () => {
     const offenders = srcFiles
       .filter((f) => /\bTRUNCATE\b/i.test(withoutComments(f.text)))
