@@ -24,7 +24,11 @@ export interface RateDecision {
 export class RateLimiter {
   private readonly log = new Logger(RateLimiter.name);
 
-  constructor(private readonly redis: RedisEval) {}
+  /** `scale` multiplies every limit (RATE_LIMIT_SCALE; 1 outside load tests). */
+  constructor(
+    private readonly redis: RedisEval,
+    private readonly scale: number,
+  ) {}
 
   async hit(key: string, limit: number, windowSec: number): Promise<RateDecision> {
     try {
@@ -32,7 +36,7 @@ export class RateLimiter {
         number,
         number,
       ];
-      if (count > limit) return { allowed: false, retryAfterSec: Math.max(ttl, 1) };
+      if (count > limit * this.scale) return { allowed: false, retryAfterSec: Math.max(ttl, 1) };
       return { allowed: true, retryAfterSec: 0 };
     } catch (error) {
       // Fail open: a Redis outage must not stop people registering.

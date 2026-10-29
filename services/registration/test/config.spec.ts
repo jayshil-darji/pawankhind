@@ -79,3 +79,30 @@ describe("TRUST_PROXY", () => {
     );
   });
 });
+
+describe("RATE_LIMIT_SCALE", () => {
+  it("defaults to 1, which changes nothing", () => {
+    expect(loadConfig(env).RATE_LIMIT_SCALE).toBe(1);
+    expect(loadConfig(prodLive).RATE_LIMIT_SCALE).toBe(1);
+  });
+
+  it("can loosen limits in test mode, in dev or prod (load test)", () => {
+    expect(loadConfig({ ...env, RATE_LIMIT_SCALE: "10" }).RATE_LIMIT_SCALE).toBe(10);
+    expect(loadConfig({ ...env, APP_ENV: "prod", RATE_LIMIT_SCALE: "10" }).RATE_LIMIT_SCALE).toBe(
+      10,
+    );
+  });
+
+  it("is refused above 1 in live mode", () => {
+    expect(rejected({ ...prodLive, RATE_LIMIT_SCALE: "2" })).toBe(
+      "Invalid environment configuration: RATE_LIMIT_SCALE",
+    );
+    expect(loadConfig({ ...prodLive, RATE_LIMIT_SCALE: "1" }).RATE_LIMIT_SCALE).toBe(1);
+  });
+
+  it.each(["0", "-1", "1.5", "abc", "", "101"])("rejects %j", (value) => {
+    expect(rejected({ ...env, RATE_LIMIT_SCALE: value })).toBe(
+      "Invalid environment configuration: RATE_LIMIT_SCALE",
+    );
+  });
+});

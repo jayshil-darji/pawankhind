@@ -10,7 +10,7 @@ beforeAll(async () => {
   container = await new GenericContainer("redis:7-alpine").withExposedPorts(6379).start();
   redis = new Redis({ host: container.getHost(), port: container.getMappedPort(6379) });
   redis.on("error", () => {});
-  limiter = new RateLimiter(redis);
+  limiter = new RateLimiter(redis, 1);
 });
 
 afterAll(async () => {
@@ -23,6 +23,13 @@ beforeEach(async () => {
 });
 
 describe("RateLimiter", () => {
+  it("multiplies the limit by its scale", async () => {
+    const scaled = new RateLimiter(redis, 3);
+    for (let i = 0; i < 6; i++) expect((await scaled.hit("s", 2, 60)).allowed).toBe(true);
+
+    expect((await scaled.hit("s", 2, 60)).allowed).toBe(false);
+  });
+
   it("allows up to the limit, then blocks with a retry time", async () => {
     for (let i = 0; i < 3; i++) expect((await limiter.hit("a", 3, 60)).allowed).toBe(true);
 
@@ -58,7 +65,7 @@ describe("RateLimiter", () => {
   });
 
   it("fails open when Redis is unavailable", async () => {
-    const broken = new RateLimiter({ eval: () => Promise.reject(new Error("redis down")) });
+    const broken = new RateLimiter({ eval: () => Promise.reject(new Error("redis down")) }, 1);
 
     expect(await broken.hit("a", 1, 60)).toEqual({ allowed: true, retryAfterSec: 0 });
   });

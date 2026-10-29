@@ -18,6 +18,13 @@ const fields = z.object({
     .default("false")
     .transform((v) => (v === "true" ? true : v === "false" ? false : Number(v))),
   HOST: z.string().default("127.0.0.1"),
+  // Multiplies every rate limit. Only for load tests in test mode; 1 (the default) changes nothing.
+  RATE_LIMIT_SCALE: z
+    .string()
+    .regex(/^[1-9]\d*$/, "use a whole number from 1")
+    .default("1")
+    .transform(Number)
+    .pipe(z.number().max(100)),
   RAZORPAY_KEY_ID: z.string().min(1),
   RAZORPAY_KEY_SECRET: z.string().min(1),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(8),
@@ -27,6 +34,9 @@ const fields = z.object({
 const schema = fields.superRefine((c, ctx) => {
   if (c.RAZORPAY_MODE === "live" && c.APP_ENV !== "prod") {
     ctx.addIssue({ code: "custom", path: ["RAZORPAY_MODE"], message: "live only in prod" });
+  }
+  if (c.RATE_LIMIT_SCALE > 1 && c.RAZORPAY_MODE !== "test") {
+    ctx.addIssue({ code: "custom", path: ["RATE_LIMIT_SCALE"], message: "only in test mode" });
   }
   if (!c.RAZORPAY_KEY_ID.startsWith(KEY_PREFIX[c.RAZORPAY_MODE])) {
     ctx.addIssue({ code: "custom", path: ["RAZORPAY_KEY_ID"], message: "key does not match mode" });
