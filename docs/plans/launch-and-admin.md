@@ -1,6 +1,6 @@
 # Plan of record: launch prerequisites and admin side
 
-Status: approved 2026-10-29 (rev 3). No slice is implemented yet. Each slice is a separate PR on its own branch.
+Status: approved 2026-10-29 (rev 3). A1 and A2 are merged; A3 is in review. Each slice is a separate PR on its own branch.
 
 ## 1. Context
 
@@ -66,9 +66,9 @@ Constraints: Rs 0 running cost apart from the domain and Route 53 (accepted). No
 
 ## 4. Data model
 
-New numbered migrations only. 001–003 are never edited.
+New numbered migrations only. Applied migrations are never edited. 004 (`payments.provider_mode`) and 005 (`environment_state`) came from the production-environment plan (P4), so A3 is 006 and the kit migration is 007.
 
-### 004_admin_auth_audit.sql (A3)
+### 006_admin_auth_audit.sql (A3)
 
 - **`admin_users`**
   - `id uuid` PK
@@ -82,19 +82,24 @@ New numbered migrations only. 001–003 are never edited.
 - **`admin_enrolments`**: `id`, `admin_user_id`, `token_hash bytea UNIQUE` (sha256), `expires_at`, `used_at`.
 - **`audit_log`**
   - `id bigint` identity, `at timestamptz DEFAULT now()`
-  - `actor_id` (FK `admin_users`, NULL for CLI or failed logins), `actor_kind` (`user` / `cli` / `anonymous`)
+  - `actor_id` (FK `admin_users`, NULL for CLI or failed logins), `actor_kind` (`user` / `cli` / `anonymous`); `CHECK ((actor_kind = 'user') = (actor_id IS NOT NULL))`
   - `action`, `target_type`, `target_id`
   - `details jsonb`: codes, filters and row counts; old/new values only for corrections
   - `ip inet`
-  - A trigger raises on UPDATE and DELETE (append-only).
+  - A trigger raises on UPDATE and DELETE (append-only), and a statement-level `BEFORE TRUNCATE` trigger raises too. Only the test `resetDatabase` lifts the TRUNCATE trigger, inside its own transaction.
+  - **Failed logins:** `actor_kind = 'anonymous'`. The typed username is never stored; if it matches an existing account, only that account's id goes into `details` (`account_id`). Recorded in `COMMENT ON TABLE audit_log`.
+  - These triggers stop mistakes, not a compromised app: the app still connects as the table owner until slice A3b.
 - **No deleting records:** BEFORE DELETE triggers raise on `registrations`, `payments` and `admin_users` (users are disabled, never deleted).
 - **Operator columns:** `registrations.entered_by` and `payments.collected_by` change from `text` to `uuid REFERENCES admin_users`. No admin rows exist yet. The `admin_needs_operator` check stays.
 - **UPI only through Razorpay, as a DB rule:** `channel IN ('online','paper_form')` and `method IN ('razorpay','cash')`.
 - **Cash payments**
-  - `CHECK (method <> 'cash' OR (reference IS NOT NULL AND collected_by IS NOT NULL AND status = 'captured'))`
-  - Unique receipt per event: `(event, lower(btrim(reference))) WHERE method = 'cash'`.
+  - `CHECK (method <> 'cash' OR (reference IS NOT NULL AND btrim(reference) <> '' AND collected_by IS NOT NULL AND status = 'captured'))`
+  - Unique receipt: `(lower(btrim(reference))) WHERE method = 'cash'`. `payments` has no event column and this database holds one event, so the index is global.
+  - `provider_mode` (004: NOT NULL, **no default**, `test`/`live`) records the environment's `RAZORPAY_MODE` on cash rows, so real cash counts as live for the reset guard. A10 writes it; 006 only adds a `COMMENT ON COLUMN`.
   - At most one cash payment per registration: `(registration_id) WHERE method = 'cash'`.
-- **Confirmed-row guard trigger:** on UPDATE where `OLD.status = 'confirmed'`, it refuses changes to `bib_number`, `date_of_birth`, `event_id`, `channel`, `status` and `confirmed_at`. The existing confirm path only updates `held` or `expired` rows, so it is unaffected.
+- **Extra checks:** an enrolled user has a TOTP secret; `admin_enrolments.token_hash` is exactly 32 bytes (sha256).
+- **Existing rows are asserted, not rewritten:** a `DO` block refuses the migration, with counts only, if any row has a retired channel or method, or an operator set.
+- **Confirmed-row guard trigger:** on UPDATE where `OLD.status = 'confirmed'`, it refuses changes to `bib_number`, `date_of_birth`, `event_id`, `channel`, `status`, `confirmed_at`, `declarations_accepted_at` and `declarations_version`. The existing confirm path only updates `held` or `expired` rows, so it is unaffected.
 
 ### Paper + cash entry (A10): no new tables
 
@@ -104,7 +109,7 @@ One transaction:
    `UPDATE events SET slots_taken = slots_taken + 1, next_bib = next_bib + 1 WHERE id = $1 AND slots_taken < capacity AND now() BETWEEN reg_opens_at AND reg_closes_at RETURNING next_bib - 1 AS bib`
    It goes through `allocateBib` and shares the window/capacity predicate with `reserveSlot`.
 2. **Insert the registration:** `status = 'confirmed'`, `channel = 'paper_form'`, bib, `entered_by`, `declarations_accepted_at = now()`, `declarations_version = '2026-10-paper-v1'`.
-3. **Insert the payment:** `cash`, `captured`. `amount_paise` comes from `events.fee_paise`. `reference` = receipt number. `collected_by` = the entering admin.
+3. **Insert the payment:** `cash`, `captured`. `amount_paise` comes from `events.fee_paise`. `reference` = receipt number. `collected_by` = the entering admin. `provider_mode` = the environment's `RAZORPAY_MODE` (the column has no default).
 4. **Insert the audit row.**
 
 Failure behaviour:
@@ -113,7 +118,7 @@ Failure behaviour:
 - **Live online hold:** returns `already_registered` with the hold expiry.
 - **Expired but unswept hold:** sweep once and retry, as `flow.start` does.
 
-### 005_kit.sql (A12)
+### 007_kit.sql (A12)
 
 - **`kit_windows`**: `id`, `event_id`, `starts_at`, `ends_at`, `CHECK (ends_at > starts_at)`. Seeded with exactly:
   - `2027-01-15 16:00 → 20:00 +05:30`
@@ -330,7 +335,7 @@ A1–A3 touch no infra and may start before Track L finishes.
 
 **A2 · Test cleanup without DELETE.** Depends on: none.
 
-- A shared `resetDatabase(pool)` in `test/support/database.ts` runs `TRUNCATE registrations, payments RESTART IDENTITY CASCADE`. Later slices extend it to their tables. It then resets the events row as the suites do today.
+- A shared `resetDatabase(pool)` in `test/support/database.ts` runs `TRUNCATE` on an explicit table list (`RESET_TABLES`) with `RESTART IDENTITY` and **no `CASCADE`**: a new table referencing a listed one makes the reset fail until it is added on purpose. Later slices extend the list (A3 added the admin and audit tables). It then resets the events row as the suites do today.
 - Replaces the `DELETE FROM` lines in all 8 int/e2e suites.
 - Why it holds up:
   - row-level `BEFORE DELETE` triggers do not fire on `TRUNCATE`;
@@ -341,9 +346,9 @@ A1–A3 touch no infra and may start before Track L finishes.
   - static test: fails on `DELETE FROM (registrations|payments|kit_collections|audit_log|admin_users)` anywhere under `services/registration/{src,test}`, or `TRUNCATE` under `src/` (mutation: add such a line);
   - isolation test: a row created in one test is gone in the next (mutation: make `resetDatabase` a no-op);
   - the events seed row survives a reset (mutation: add `events` to the TRUNCATE).
-- Risk: `CASCADE` reaching further than intended (the events test covers it).
+- `CASCADE` was dropped during implementation, which removes the risk of it reaching further than intended. A test proves an unlisted referencing table makes the reset fail.
 
-**A3 · Migration 004.** Depends on: A2.
+**A3 · Migration 006.** Depends on: A2.
 
 - Section 4 as specified.
 - Tests (mutation in brackets):
@@ -356,6 +361,13 @@ A1–A3 touch no infra and may start before Track L finishes.
   - the full existing suite stays green.
 - Verify: migrate up/down/up in testcontainers.
 - Risks: the `text` → `uuid` type change; the down migration; a trigger blocking a legitimate existing update (the existing suite covers it).
+
+**A3b · Separate app database role.** Depends on: A3. Needed before: the first prod admin account (A5 run on prod).
+
+- Today the app connects as `pawankhind`, the Docker image's superuser and the owner of every table, so it can disable the A3 triggers or truncate `audit_log`.
+- A non-owner, non-superuser `pawankhind_app` login role: `SELECT`/`INSERT`/`UPDATE` where the app needs them, `INSERT` and `SELECT` only on `audit_log`, no `DELETE` or `TRUNCATE` anywhere. Migrations keep running as the owner.
+- The role is created `NOLOGIN` in a migration; its password comes from a new SSM parameter (never in git) and is set by `remote-deploy.sh`. The app gets its own `DATABASE_URL`, and the migrate step gets the owner URL. The deploy's parameter-count check and `sed` lines change; the owner applies the SSM Terraform.
+- Every later migration grants on its new tables. Tests: the e2e suite runs as the app role; that role's `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log` and `ALTER TABLE … DISABLE TRIGGER` fail with `42501` (mutation: grant them).
 
 **A4 · CloudFront admin gates + security headers.** Depends on: L3 (L4 optional).
 
@@ -437,7 +449,7 @@ A1–A3 touch no infra and may start before Track L finishes.
   - BIB comes only from the response (show a client value);
   - a double submit shows "receipt already used".
 
-**A12 · Kit API + migration 005.** Depends on: A3, A7. Needed by: 15 Jan (target 8 Jan).
+**A12 · Kit API + migration 007.** Depends on: A3, A7. Needed by: 15 Jan (target 8 Jan).
 
 - Tests (mutation in brackets):
   - **concurrent double collect with a barrier → one 201, one 409 with who and when** (PK → plain index);
@@ -512,6 +524,7 @@ A1–A3 touch no infra and may start before Track L finishes.
 ```
 (production-environment plan) → L1 → L2 → L3          L1 → L4
 A1, A2 → A3 → A5 → A6 → A7 → A8
+A3 → A3b → (first prod admin account)
 L3 → A4;   A4 + A8 → A9
 A1 + A3 + A7 → A10 → A11
 A3 + A7 → A12 → A13, A14
