@@ -85,6 +85,7 @@ infra/envs/prod/    NEW, a reviewed copy of dev (state envs/prod/terraform.tfsta
 
 - **Why it's acceptable:** the data is tiny (≤ 3000 rows), captured payments also exist at Razorpay, and the restore is drilled before launch.
 - **Switch to RDS** if the drill misses 45 minutes.
+- **App database role:** the app still connects as the image's superuser, which owns the tables. Slice A3b in `launch-and-admin.md` adds a separate, non-owner app role (its password in SSM, set by the deploy) before the first prod admin account.
 
 ## 4. Backups
 
@@ -145,7 +146,8 @@ infra/envs/prod/    NEW, a reviewed copy of dev (state envs/prod/terraform.tfsta
 
 **Payment mode recorded (P4):**
 
-- Additive migration: `payments.provider_mode text NOT NULL DEFAULT 'test' CHECK (provider_mode IN ('test','live'))`, stamped from config whenever the server creates a payment.
+- Additive migration (004): `payments.provider_mode text NOT NULL CHECK (provider_mode IN ('test','live'))`. The `'test'` default only backfilled existing rows and was then dropped, so every insert must state the mode. It is stamped from config whenever the server creates a payment.
+- Cash rows (admin plan A10) record the environment's `RAZORPAY_MODE`, so real cash also counts as live for guard 4 in §9.
 - The reset guard (§9) relies on it.
 
 **Live marker (P4):** the first app start with `RAZORPAY_MODE=live` writes `live_activated_at` to a one-row `environment_state` table (additive migration). The owner also creates SSM `/pawankhind/prod/LIVE_ACTIVATED` during the live switch.

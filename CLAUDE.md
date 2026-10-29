@@ -29,6 +29,10 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Schema changes only through numbered SQL files in services/registration/migrations (node-pg-migrate). Never edit an applied migration; add a new one.
 - Money is integer paise. Times are timestamptz. Mobile numbers are 10 digits, no country code.
 - Slot and BIB counters live on the events row and change only with single UPDATE statements inside transactions.
+- audit_log is append-only (migration 006): UPDATE, DELETE and TRUNCATE raise. Never write code that changes or removes audit rows. Only resetDatabase in the tests lifts the TRUNCATE trigger, inside its own transaction; nothing else disables triggers (source check).
+- Failed logins are audited as actor_kind 'anonymous'. Never store the typed username; if it matches an account, put only that account's id in details.
+- DELETE raises on registrations, payments and admin_users (disable users, never delete). A confirmed registration keeps its BIB, DOB, event, channel, status, confirmed_at and declarations.
+- Known gap: the app connects as the table owner (the Docker image's superuser), so these triggers stop mistakes, not a compromised app. Slice A3b (separate app DB role) closes it before the first prod admin account.
 
 - Concurrency tests must be able to fail: after writing one, break the code on purpose and confirm the test goes red. Race tests force overlap (held-lock barrier); they never rely on timing luck.
 
