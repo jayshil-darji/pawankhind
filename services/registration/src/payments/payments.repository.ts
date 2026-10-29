@@ -1,6 +1,10 @@
 import pg from "pg";
 import { withTransaction } from "../infra/transaction.js";
 import { isUniqueViolation } from "../infra/db-errors.js";
+import type { Config } from "../config.js";
+
+/** The Razorpay mode a payment was created in. Stamped by the server, never by a client. */
+export type ProviderMode = Config["RAZORPAY_MODE"];
 
 export type ConfirmResult =
   | { ok: true; bib: number; registrationId: string; alreadyConfirmed: boolean }
@@ -24,7 +28,10 @@ interface RegistrationRow {
 }
 
 export class PaymentsRepository {
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly mode: ProviderMode,
+  ) {}
 
   /** Creates the payment row for a held registration. Amount always comes from the event fee. */
   async createPaymentIntent(
@@ -32,12 +39,13 @@ export class PaymentsRepository {
     providerOrderId: string,
   ): Promise<{ paymentId: string; amountPaise: number } | null> {
     const result = await this.pool.query<{ id: string; amount_paise: number }>(
-      `INSERT INTO payments (registration_id, method, status, amount_paise, provider_order_id)
-       SELECT r.id, 'razorpay', 'created', e.fee_paise, $2
+      `INSERT INTO payments
+         (registration_id, method, status, amount_paise, provider_order_id, provider_mode)
+       SELECT r.id, 'razorpay', 'created', e.fee_paise, $2, $3
          FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.id = $1 AND r.status = 'held'
        RETURNING id, amount_paise`,
-      [registrationId, providerOrderId],
+      [registrationId, providerOrderId, this.mode],
     );
     const row = result.rows[0];
     return row ? { paymentId: row.id, amountPaise: row.amount_paise } : null;

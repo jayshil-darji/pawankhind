@@ -10,7 +10,16 @@ export interface TestDatabase {
   connectionUri: string;
 }
 
-export async function startTestDatabase(): Promise<TestDatabase> {
+const MIGRATIONS_DIR = join(import.meta.dirname, "../../migrations");
+
+/** Runs the Up part of one migration file, the way startTestDatabase does. */
+export async function applyMigration(pool: pg.Pool, file: string): Promise<void> {
+  const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+  await pool.query(sql.split("-- Down Migration")[0]);
+}
+
+/** `upTo` stops after that migration file (inclusive), to test a later one against older data. */
+export async function startTestDatabase(options: { upTo?: string } = {}): Promise<TestDatabase> {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     "postgres:17",
   ).start();
@@ -18,13 +27,10 @@ export async function startTestDatabase(): Promise<TestDatabase> {
   pool.on("error", () => {
     // During teardown the server may tell idle clients it is going away. Not a test failure.
   });
-  const dir = join(import.meta.dirname, "../../migrations");
-
-  for (const file of readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+  for (const file of readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql") && (!options.upTo || f <= options.upTo))
     .sort()) {
-    const sql = readFileSync(join(dir, file), "utf8");
-    await pool.query(sql.split("-- Down Migration")[0]);
+    await applyMigration(pool, file);
   }
   return {
     pool,

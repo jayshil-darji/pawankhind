@@ -30,7 +30,7 @@ const job = () =>
 beforeAll(async () => {
   db = await startTestDatabase();
   registrations = new RegistrationsRepository(db.pool);
-  payments = new PaymentsRepository(db.pool);
+  payments = new PaymentsRepository(db.pool, "test");
 });
 
 afterAll(async () => {

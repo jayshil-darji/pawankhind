@@ -10,7 +10,7 @@ let eventId: string;
 beforeAll(async () => {
   db = await startTestDatabase();
   registrations = new RegistrationsRepository(db.pool);
-  payments = new PaymentsRepository(db.pool);
+  payments = new PaymentsRepository(db.pool, "test");
 });
 
 afterAll(async () => {
@@ -40,8 +40,9 @@ describe("a second payment for an already confirmed registration", () => {
     expect(first).toMatchObject({ ok: true, bib: 1001 });
 
     await db.pool.query(
-      `INSERT INTO payments (registration_id, method, status, amount_paise, provider_order_id)
-       VALUES ($1, 'razorpay', 'created', 20000, 'order_B')`,
+      `INSERT INTO payments
+         (registration_id, method, status, amount_paise, provider_order_id, provider_mode)
+       VALUES ($1, 'razorpay', 'created', 20000, 'order_B', 'test')`,
       [reserved.registrationId],
     );
     const second = await payments.confirmOnlinePayment({
