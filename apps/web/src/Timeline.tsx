@@ -2,7 +2,7 @@ const STEPS = [
   { date: "15 Nov 2026", label: "Registration opens" },
   { date: "8 Jan 2027", label: "Registration closes, or earlier if all 3,000 places are taken" },
   { date: "15–16 Jan 2027", label: "Kit collection" },
-  { date: "17 Jan 2027", label: "Race day" },
+  { date: "17 Jan 2027", label: "Race day, reporting 6:00 am and flag off time 7:00" },
 ];
 
 export default function Timeline() {

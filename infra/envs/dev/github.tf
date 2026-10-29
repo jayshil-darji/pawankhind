@@ -71,3 +71,26 @@ resource "aws_iam_role_policy" "github_ci" {
 output "github_ci_role_arn" {
   value = aws_iam_role.github_ci.arn
 }
+
+data "aws_iam_policy_document" "github_ci_web" {
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.web.arn]
+  }
+
+  statement {
+    actions   = ["s3:PutObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.web.arn}/*"]
+  }
+
+  statement {
+    actions   = ["cloudfront:CreateInvalidation"]
+    resources = [aws_cloudfront_distribution.web.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "github_ci_web" {
+  name   = "deploy-web"
+  role   = aws_iam_role.github_ci.id
+  policy = data.aws_iam_policy_document.github_ci_web.json
+}

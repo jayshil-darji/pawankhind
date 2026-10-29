@@ -16,11 +16,11 @@ describe("Countdown", () => {
 
     render(<Countdown />);
 
-    expect(screen.getByRole("timer")).toHaveTextContent("80Days14Hours30Minutes00Seconds");
+    expect(screen.getByRole("timer")).toHaveTextContent("80Days15Hours30Minutes00Seconds");
   });
 
   it("ticks down every second", () => {
-    vi.setSystemTime(new Date("2027-01-17T00:29:50Z"));
+    vi.setSystemTime(new Date("2027-01-17T01:29:50Z"));
     render(<Countdown />);
     expect(screen.getByRole("timer")).toHaveTextContent("10Seconds");
 
@@ -32,7 +32,7 @@ describe("Countdown", () => {
   });
 
   it("says it is race day once the start time has passed", () => {
-    vi.setSystemTime(new Date("2027-01-17T01:00:00Z"));
+    vi.setSystemTime(new Date("2027-01-17T01:30:00Z"));
 
     render(<Countdown />);
 
