@@ -31,10 +31,14 @@ const PROTECTED_TABLES = [
   "admin_users",
 ];
 
+/** The one file that proves the DELETE guards raise. Nothing else may DELETE these tables. */
+const DELETE_GUARD_TESTS = ["test/admin-audit-schema.int-spec.ts"];
+
 describe("test database rules (source check)", () => {
   it("never DELETEs from protected tables, in src or test (tests reset with TRUNCATE)", () => {
     const deleteFrom = new RegExp(`\\bDELETE\\s+FROM\\s+(${PROTECTED_TABLES.join("|")})\\b`, "i");
     const offenders = [...srcFiles, ...testFiles]
+      .filter((f) => !DELETE_GUARD_TESTS.includes(f.path))
       .filter((f) => deleteFrom.test(withoutComments(f.text)))
       .map((f) => f.path);
 

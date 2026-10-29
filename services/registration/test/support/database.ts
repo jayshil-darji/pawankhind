@@ -35,6 +35,14 @@ export async function applyMigration(pool: pg.Pool, file: string): Promise<void>
   await pool.query(sql.split("-- Down Migration")[0]);
 }
 
+/** Runs the Down part of one migration file. */
+export async function applyDownMigration(pool: pg.Pool, file: string): Promise<void> {
+  const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+  const down = sql.split("-- Down Migration")[1];
+  if (!down?.trim()) throw new Error(`${file} has no Down Migration`);
+  await pool.query(down);
+}
+
 /** `upTo` stops after that migration file (inclusive), to test a later one against older data. */
 export async function startTestDatabase(options: { upTo?: string } = {}): Promise<TestDatabase> {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
@@ -70,6 +78,46 @@ export async function resetDatabase(pool: pg.Pool, event: { capacity: number }):
        reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'
      RETURNING id`,
     [event.capacity],
+  );
+  return rows[0].id;
+}
+
+/** Inserts a registration directly (no app code), so schema tests can set any status. Confirmed
+ *  rows get BIB 2000 + i. Works on every schema from 003 on. */
+export async function insertRegistration(
+  pool: pg.Pool,
+  eventId: string,
+  i: number,
+  status: "held" | "confirmed" | "expired",
+  options: { channel?: string; enteredBy?: string | null } = {},
+): Promise<string> {
+  const p = person(i);
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO registrations
+       (event_id, status, channel, entered_by, full_name, date_of_birth, gender, mobile,
+        tshirt_size, city, emergency_contact_name, emergency_contact_mobile,
+        hold_expires_at, bib_number, confirmed_at, declarations_accepted_at, declarations_version)
+     VALUES ($1, $2::text, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+             CASE WHEN $2::text = 'held' THEN now() + interval '10 minutes' END,
+             CASE WHEN $2::text = 'confirmed' THEN 2000 + $13::int END,
+             CASE WHEN $2::text = 'confirmed' THEN now() END,
+             now(), 'test-v1')
+     RETURNING id`,
+    [
+      eventId,
+      status,
+      options.channel ?? "online",
+      options.enteredBy ?? null,
+      p.fullName,
+      p.dateOfBirth,
+      p.gender,
+      p.mobile,
+      p.tshirtSize,
+      p.city,
+      p.emergencyContactName,
+      p.emergencyContactMobile,
+      i,
+    ],
   );
   return rows[0].id;
 }
