@@ -36,6 +36,9 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: "3001"
       HOST: 0.0.0.0
+      # Dev is always test mode (the app refuses live outside prod), so these are fixed here, not in SSM.
+      APP_ENV: dev
+      RAZORPAY_MODE: test
       # One proxy hop: CloudFront. Never "true" (that trusts the client's own X-Forwarded-For).
       TRUST_PROXY: "1"
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?missing RAZORPAY_KEY_ID in .env}

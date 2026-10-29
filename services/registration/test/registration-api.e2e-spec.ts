@@ -10,16 +10,8 @@ import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 import { FakeRedis } from "./support/fake-redis.js";
 import { LIMITS } from "../src/infra/rate-limit.js";
-import { loadConfig } from "../src/config.js";
 import { fastifyOptions } from "../src/http-options.js";
-
-const REQUIRED_ENV = {
-  DATABASE_URL: "unused",
-  REDIS_URL: "unused",
-  RAZORPAY_KEY_ID: "rzp_test_fake",
-  RAZORPAY_KEY_SECRET: "unused",
-  RAZORPAY_WEBHOOK_SECRET: "unused-webhook",
-};
+import { testConfig } from "./support/config.js";
 
 class FakeProvider implements PaymentProvider {
   failCreate = false;
@@ -84,13 +76,13 @@ beforeAll(async () => {
     .overrideProvider(REDIS)
     .useValue(fakeRedis)
     .overrideProvider(APP_CONFIG)
-    .useValue({ RAZORPAY_KEY_ID: "rzp_test_fake" })
+    .useValue(testConfig())
     .overrideProvider(PAYMENT_PROVIDER)
     .useValue(fake)
     .compile();
   // Same adapter options as main.ts, with the value deploy/compose.dev.yaml sets (one CloudFront hop).
   app = moduleRef.createNestApplication<NestFastifyApplication>(
-    new FastifyAdapter(fastifyOptions(loadConfig({ ...REQUIRED_ENV, TRUST_PROXY: "1" }))),
+    new FastifyAdapter(fastifyOptions(testConfig({ TRUST_PROXY: "1" }))),
   );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

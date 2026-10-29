@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const schema = z.object({
+const KEY_PREFIX = { test: "rzp_test_", live: "rzp_live_" } as const;
+
+const fields = z.object({
+  // Required, no defaults: a missing value must stop the app, never fall back to a mode.
+  APP_ENV: z.enum(["dev", "prod"]),
+  RAZORPAY_MODE: z.enum(["test", "live"]),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3001),
@@ -13,12 +18,27 @@ const schema = z.object({
     .default("false")
     .transform((v) => (v === "true" ? true : v === "false" ? false : Number(v))),
   HOST: z.string().default("127.0.0.1"),
-  RAZORPAY_KEY_ID: z.string().startsWith("rzp_test_", "use a TEST key (rzp_test_...)"),
+  RAZORPAY_KEY_ID: z.string().min(1),
   RAZORPAY_KEY_SECRET: z.string().min(1),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(8),
 });
 
+// Live payments only in production, and the key must belong to the declared mode.
+const schema = fields.superRefine((c, ctx) => {
+  if (c.RAZORPAY_MODE === "live" && c.APP_ENV !== "prod") {
+    ctx.addIssue({ code: "custom", path: ["RAZORPAY_MODE"], message: "live only in prod" });
+  }
+  if (!c.RAZORPAY_KEY_ID.startsWith(KEY_PREFIX[c.RAZORPAY_MODE])) {
+    ctx.addIssue({ code: "custom", path: ["RAZORPAY_KEY_ID"], message: "key does not match mode" });
+  }
+});
+
 export type Config = z.infer<typeof schema>;
+
+/** The one startup line about payments. Names the mode, never a key. */
+export function describePaymentMode(config: Pick<Config, "RAZORPAY_MODE">): string {
+  return `razorpay mode: ${config.RAZORPAY_MODE}`;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = schema.safeParse(env);

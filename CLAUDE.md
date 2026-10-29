@@ -33,7 +33,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Concurrency tests must be able to fail: after writing one, break the code on purpose and confirm the test goes red. Race tests force overlap (held-lock barrier); they never rely on timing luck.
 
 - Payments: a payment is real only after the server (a) verifies the Razorpay signature with an order ID from our own database, and (b) fetches the payment from Razorpay and checks status 'captured' and amount. Amounts always come from events.fee_paise, never from a request.
-- Razorpay keys: test keys only (rzp_test_...) until a deliberate go-live. Never log or echo secrets.
+- Razorpay keys: APP_ENV (dev|prod) and RAZORPAY_MODE (test|live) are required, with no defaults. The key prefix must match the mode, and live is accepted only with APP_ENV=prod. Dev is always test (fixed in deploy/compose.dev.yaml). Never log or echo secrets; the startup log names the mode only.
 
 - HTTP layer: validate every body with the shared zod schemas; never accept amounts, order IDs or BIBs from clients; error responses carry a stable code, never raw database errors.
 
