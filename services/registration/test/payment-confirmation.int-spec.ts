@@ -192,6 +192,28 @@ describe("confirmOnlinePayment", () => {
     expect(row.status).toBe("captured");
   });
 
+  it("issues unique, gap-free BIBs when 5 confirmations are forced to overlap on the events row", async () => {
+    const holds = [];
+    for (let i = 1; i <= 5; i++) holds.push(await heldWithOrder(i));
+
+    // Hold the events row, which allocateBib must update, so every confirmation queues on it.
+    const blocker = await db.pool.connect();
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT 1 FROM events WHERE id = $1 FOR UPDATE", [eventId]);
+
+    const pending = holds.map((h) => confirm(h));
+    await waitForBlocked(5);
+
+    await blocker.query("COMMIT");
+    blocker.release();
+
+    const results = await Promise.all(pending);
+
+    const bibs = results.map((r) => (r.ok ? r.bib : -1)).sort((a, b) => a - b);
+    expect(bibs).toEqual([1001, 1002, 1003, 1004, 1005]);
+    expect((await event()).next_bib).toBe(1006);
+  });
+
   it("issues one BIB when 10 identical payments are forced to overlap", async () => {
     const h = await heldWithOrder(1);
 
