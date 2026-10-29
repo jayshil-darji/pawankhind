@@ -1,11 +1,10 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import { testConfig } from "./support/config.js";
-import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { person, startTestDatabase, TestDatabase, testPool } from "./support/database.js";
 import { FakeRedis } from "./support/fake-redis.js";
 
 /** Only order creation is used here; everything else refuses. */
@@ -32,8 +31,7 @@ class OrdersOnlyProvider implements PaymentProvider {
 const LIVE = { APP_ENV: "prod", RAZORPAY_MODE: "live", RAZORPAY_KEY_ID: "rzp_live_fake" };
 
 async function startApp(db: TestDatabase, overrides: Record<string, string>) {
-  const pool = new pg.Pool({ connectionString: db.connectionUri });
-  pool.on("error", () => {});
+  const pool = testPool(db.connectionUri);
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PG_POOL)
     .useValue(pool)

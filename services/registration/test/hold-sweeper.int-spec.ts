@@ -1,6 +1,6 @@
 import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { RegistrationsRepository } from "../src/registrations/registrations.repository.js";
-import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { person, startTestDatabase, TestDatabase, resetDatabase } from "./support/database.js";
 
 let db: TestDatabase;
 let repo: RegistrationsRepository;
@@ -16,13 +16,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await db.pool.query("DELETE FROM payments");
-  await db.pool.query("DELETE FROM registrations");
-  await db.pool.query(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = 5,
-       reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'`,
-  );
-  eventId = (await db.pool.query<{ id: string }>("SELECT id FROM events")).rows[0].id;
+  eventId = await resetDatabase(db.pool, { capacity: 5 });
 });
 
 const expire = (name: string) =>
