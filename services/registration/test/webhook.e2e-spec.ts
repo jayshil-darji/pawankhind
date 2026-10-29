@@ -7,6 +7,7 @@ import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { testConfig } from "./support/config.js";
 
 const WEBHOOK_SECRET = "whsec_test_secret";
 
@@ -64,7 +65,7 @@ beforeAll(async () => {
     .overrideProvider(REDIS)
     .useValue({ ping: () => Promise.resolve("PONG"), disconnect: () => {} })
     .overrideProvider(APP_CONFIG)
-    .useValue({ RAZORPAY_KEY_ID: "rzp_test_fake" })
+    .useValue(testConfig())
     .overrideProvider(PAYMENT_PROVIDER)
     .useValue(fake)
     .compile();

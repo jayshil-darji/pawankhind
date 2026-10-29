@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import { AppModule } from "../src/app.module.js";
 import { PG_POOL, REDIS, APP_CONFIG } from "../src/infra/tokens.js";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { testConfig } from "./support/config.js";
 
 async function createApp(pool: unknown, redis: unknown) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -10,11 +11,7 @@ async function createApp(pool: unknown, redis: unknown) {
     .overrideProvider(REDIS)
     .useValue(redis)
     .overrideProvider(APP_CONFIG)
-    .useValue({
-      RAZORPAY_KEY_ID: "rzp_test_fake",
-      RAZORPAY_KEY_SECRET: "fake",
-      RAZORPAY_WEBHOOK_SECRET: "fake-webhook",
-    })
+    .useValue(testConfig())
     .compile();
 
   const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());

@@ -1,7 +1,8 @@
 import { Global, Inject, Logger, Module, OnApplicationShutdown } from "@nestjs/common";
-import { loadConfig } from "../config.js";
+import { loadConfig, type Config } from "../config.js";
 import PG from "pg";
 import { APP_CONFIG, PG_POOL, REDIS } from "./tokens.js";
+import { LiveModeMarker } from "./live-mode-marker.js";
 import { Redis } from "ioredis";
 
 @Global()
@@ -22,6 +23,11 @@ import { Redis } from "ioredis";
     {
       provide: APP_CONFIG,
       useFactory: () => loadConfig(),
+    },
+    {
+      provide: LiveModeMarker,
+      useFactory: (pool: PG.Pool, config: Config) => new LiveModeMarker(pool, config),
+      inject: [PG_POOL, APP_CONFIG],
     },
   ],
   exports: [PG_POOL, REDIS, APP_CONFIG],

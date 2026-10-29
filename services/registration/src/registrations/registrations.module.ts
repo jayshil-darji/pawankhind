@@ -27,8 +27,9 @@ const RECONCILE_LOOKBACK_SECONDS = 48 * 3600;
     },
     {
       provide: PaymentsRepository,
-      useFactory: (pool: pg.Pool) => new PaymentsRepository(pool),
-      inject: [PG_POOL],
+      useFactory: (pool: pg.Pool, config: Config) =>
+        new PaymentsRepository(pool, config.RAZORPAY_MODE),
+      inject: [PG_POOL, APP_CONFIG],
     },
     {
       provide: PAYMENT_PROVIDER,
@@ -69,8 +70,9 @@ const RECONCILE_LOOKBACK_SECONDS = 48 * 3600;
     },
     {
       provide: RateLimiter,
-      useFactory: (redis: RedisEval) => new RateLimiter(redis),
-      inject: [REDIS],
+      useFactory: (redis: RedisEval, config: Config) =>
+        new RateLimiter(redis, config.RATE_LIMIT_SCALE),
+      inject: [REDIS, APP_CONFIG],
     },
   ],
 })
