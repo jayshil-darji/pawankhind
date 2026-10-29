@@ -6,7 +6,13 @@ import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
-import { person, startTestDatabase, TestDatabase, testPool } from "./support/database.js";
+import {
+  person,
+  startTestDatabase,
+  TestDatabase,
+  testPool,
+  resetDatabase,
+} from "./support/database.js";
 import { testConfig } from "./support/config.js";
 
 const WEBHOOK_SECRET = "whsec_test_secret";
@@ -82,12 +88,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   fake.reset();
-  await db.pool.query("DELETE FROM payments");
-  await db.pool.query("DELETE FROM registrations");
-  await db.pool.query(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = 3,
-       reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'`,
-  );
+  await resetDatabase(db.pool, { capacity: 3 });
 });
 
 async function start(i: number): Promise<StartBody> {

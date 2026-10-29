@@ -6,7 +6,7 @@ import {
 } from "../src/registrations/registrations.repository.js";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { testPool } from "./support/database.js";
+import { testPool, resetDatabase } from "./support/database.js";
 
 let container: StartedPostgreSqlContainer;
 let pool: pg.Pool;
@@ -52,13 +52,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await pool.query("DELETE FROM payments");
-  await pool.query("DELETE FROM registrations");
-  await pool.query(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib,
-       capacity = 5, reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'`,
-  );
-  eventId = (await pool.query<{ id: string }>("SELECT id FROM events")).rows[0].id;
+  eventId = await resetDatabase(pool, { capacity: 5 });
 });
 
 async function counts() {

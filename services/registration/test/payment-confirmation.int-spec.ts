@@ -1,6 +1,6 @@
 import { RegistrationsRepository } from "../src/registrations/registrations.repository.js";
 import { PaymentsRepository } from "../src/payments/payments.repository.js";
-import { startTestDatabase, person, TestDatabase } from "./support/database.js";
+import { startTestDatabase, person, TestDatabase, resetDatabase } from "./support/database.js";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -20,13 +20,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await db.pool.query("DELETE FROM payments");
-  await db.pool.query("DELETE FROM registrations");
-  await db.pool.query(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = 5,
-       reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'`,
-  );
-  eventId = (await db.pool.query<{ id: string }>("SELECT id FROM events")).rows[0].id;
+  eventId = await resetDatabase(db.pool, { capacity: 5 });
 });
 
 async function heldWithOrder(i: number) {

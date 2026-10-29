@@ -5,7 +5,13 @@ import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
-import { person, startTestDatabase, TestDatabase, testPool } from "./support/database.js";
+import {
+  person,
+  startTestDatabase,
+  TestDatabase,
+  testPool,
+  resetDatabase,
+} from "./support/database.js";
 import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 import { FakeRedis } from "./support/fake-redis.js";
@@ -95,12 +101,7 @@ afterAll(async () => {
 beforeEach(async () => {
   fakeRedis.reset();
   fake.reset();
-  await db.pool.query("DELETE FROM payments");
-  await db.pool.query("DELETE FROM registrations");
-  await db.pool.query(
-    `UPDATE events SET slots_taken = 0, next_bib = first_bib, capacity = 3,
-       reg_opens_at = now() - interval '1 day', reg_closes_at = now() + interval '1 day'`,
-  );
+  await resetDatabase(db.pool, { capacity: 3 });
 });
 
 const startRegistration = (i: number, body: unknown = person(i)) =>
@@ -319,8 +320,9 @@ describe("starting again while a hold is live", () => {
   });
 
   it("does not create a second order while the first request is still setting up", async () => {
-    const first = (await startRegistration(1)).json<Started>();
-    await db.pool.query("DELETE FROM payments WHERE registration_id = $1", [first.registrationId]);
+    await startRegistration(1);
+    // The only registration so far loses its order row: "held, order not recorded yet".
+    await db.pool.query("TRUNCATE payments");
 
     const again = await startRegistration(1);
 
