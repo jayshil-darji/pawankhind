@@ -36,11 +36,14 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: "3001"
       HOST: 0.0.0.0
+      # One proxy hop: CloudFront. Never "true" (that trusts the client's own X-Forwarded-For).
+      TRUST_PROXY: "1"
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?missing RAZORPAY_KEY_ID in .env}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:?missing RAZORPAY_KEY_SECRET in .env}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:?missing RAZORPAY_WEBHOOK_SECRET in .env}
+    # Host port 80 is reachable only from CloudFront (security group prefix list).
     ports:
-      - "127.0.0.1:3001:3001"
+      - "80:3001"
     depends_on:
       postgres:
         condition: service_healthy

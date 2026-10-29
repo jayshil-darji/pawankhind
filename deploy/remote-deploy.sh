@@ -37,7 +37,7 @@ docker compose run --rm --no-deps registration \
 docker compose up -d --remove-orphans
 
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:3001/health/ready > /dev/null; then
+  if curl -fsS http://127.0.0.1/health/ready > /dev/null; then
     echo "ready after $i checks: $IMAGE"
     exit 0
   fi

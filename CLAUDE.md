@@ -70,7 +70,13 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - Every public endpoint under /api has a RateLimit rule, except the webhook (Razorpay must never be throttled).
 - Rate limiting fails open (log, allow). It protects us; it must never be the reason registrations stop.
-- Never trust X-Forwarded-For unless TRUST_PROXY=true, which is only for a trusted proxy in front of the app.
+- Never trust X-Forwarded-For unless TRUST_PROXY is set for a trusted proxy in front of the app. Behind CloudFront use the hop count TRUST_PROXY=1, never true (true trusts the client's own X-Forwarded-For). A hop count is safe only while the network lets nothing but that proxy reach the app.
+
+## CloudFront and the dev API
+
+- /api/\* goes from CloudFront to the instance's public DNS on HTTP port 80 (no cache, no gate). The security group allows port 80 only from the CloudFront origin-facing prefix list.
+- The instance's public DNS changes on every stop/start, and is empty while the instance is stopped. Run terraform plan/apply only while the instance is RUNNING, and re-apply after each start. Until then CloudFront points at the old name and /api/\* returns 502/504.
+- The gate function (default behaviour only) also does the SPA fallback: extension-less paths are rewritten to /index.html. There is no distribution-wide custom_error_response, because it would turn API 403/404 into 200 + HTML. At go-live remove only the password check from the function. Keep the rewrite.
 
 ## Web app: result page
 
@@ -101,7 +107,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 ## Before go-live
 
 - Replace the personal contact number (EVENT.contact) with an event-only number/email.
-- Remove the pre-launch password gate from CloudFront.
+- Remove the pre-launch password check from the CloudFront gate function (keep its SPA rewrite).
 - Buy a domain and attach it to CloudFront and the API; update Razorpay and WhatsApp settings.
 - Replace the placeholder route with the real one; get legal pages reviewed.
 
@@ -109,36 +115,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - Server: registration API with rate limiting; health and terms declarations stored per registration (migration 003); Razorpay in test mode. Deployed to the dev EC2 instance by the Release workflow (SSM).
 - Web: landing page, themed legal and result pages, registration form with consent checkboxes. Race start time is 07:00 IST (confirmed). Deployed to S3 + CloudFront (infra/envs/dev/web.tf) behind an organizer password gate (CloudFront Function, basic auth). Deploy job: deploy-web in .github/workflows/release.yaml.
-- The dev instance has no public inbound port. Reach it through an SSM port-forward. Stop it when idle. AWS commands need AWS_PROFILE=pawankhind AWS_REGION=ap-southeast-2.
-- The CloudFront URL is organizer-only until go-live. There is no custom domain in dev.
-- Dev contact number is the personal number (EVENT.contact). It must be replaced before go-live.
-
-## Working rules for Claude Code
-
-- Before starting any task: make sure the working tree is clean (git status). If it is not, stop and ask me.
-- Then run git checkout main and git pull, and create a new local branch from the updated main. Prefix: feat/ for features, fix/ for bug fixes, infra/ for Terraform and deployment, chore/ for housekeeping. One task, one branch.
-- Make small local commits with clear messages (conventional style: feat(scope): ..., fix(scope): ...). End each commit message with the attribution trailer lines the harness gives you.
-- Never git push, merge, rebase onto shared branches, force-push, or delete remote branches. I review the commits and push manually.
-- Never run terraform apply or terraform destroy. Run terraform fmt, validate and plan only, and show me the plan summary.
-- Never start or stop EC2 instances or change AWS resources directly. Show me the command and I run it.
-- Never print or commit secrets, .env files, or the gate password (TF_VAR_gate_password).
-- Every new test must be able to fail: after writing it, tell me one mutation that makes it go red, and verify that it does.
-- Finish each task by running pnpm format && pnpm lint && pnpm turbo build check-types test, and report the result.
-- Explain non-obvious choices briefly. Prefer small, reviewable changes.
-
-## Remaining work (in order)
-
-1. Route /api/* from CloudFront to the EC2 API (no cache, no gate); the Razorpay webhook must keep working.
-2. Admin side: manual/paper/cash/UPI registration (same ParticipantInput plus signed-paper-form ticks, and a channel parameter), dashboard with filters and Excel export, kit counter (kit days 15 and 16 Jan only).
-3. BIB delivery by WhatsApp with SMS fallback and a retry queue.
-4. Monitoring, alerts, and an admin report of paid-but-unfulfilled payments.
-5. Pre-launch: domain, HTTPS end to end, event-only contact, real route, legal review, remove the gate.
-
-## Current state (2026-10-29)
-
-- Server: registration API with rate limiting; health and terms declarations stored per registration (migration 003); Razorpay in test mode. Deployed to the dev EC2 instance by the Release workflow (SSM).
-- Web: landing page, themed legal and result pages, registration form with consent checkboxes. Race start time is 07:00 IST (confirmed). Deployed to S3 + CloudFront (infra/envs/dev/web.tf) behind an organizer password gate (CloudFront Function, basic auth). Deploy job: deploy-web in .github/workflows/release.yaml.
-- The dev instance has no public inbound port. Reach it through an SSM port-forward. Stop it when idle. AWS commands need AWS_PROFILE=pawankhind AWS_REGION=ap-southeast-2.
+- The dev instance's only inbound port is 80, from CloudFront. Reach it otherwise through an SSM port-forward. Stop it when idle. AWS commands need AWS_PROFILE=pawankhind AWS_REGION=ap-southeast-2.
 - The CloudFront URL is organizer-only until go-live. There is no custom domain in dev.
 - Dev contact number is the personal number (EVENT.contact). It must be replaced before go-live.
 

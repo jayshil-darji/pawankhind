@@ -10,6 +10,16 @@ import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 import { FakeRedis } from "./support/fake-redis.js";
 import { LIMITS } from "../src/infra/rate-limit.js";
+import { loadConfig } from "../src/config.js";
+import { fastifyOptions } from "../src/http-options.js";
+
+const REQUIRED_ENV = {
+  DATABASE_URL: "unused",
+  REDIS_URL: "unused",
+  RAZORPAY_KEY_ID: "rzp_test_fake",
+  RAZORPAY_KEY_SECRET: "unused",
+  RAZORPAY_WEBHOOK_SECRET: "unused-webhook",
+};
 
 class FakeProvider implements PaymentProvider {
   failCreate = false;
@@ -78,7 +88,10 @@ beforeAll(async () => {
     .overrideProvider(PAYMENT_PROVIDER)
     .useValue(fake)
     .compile();
-  app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+  // Same adapter options as main.ts, with the value deploy/compose.dev.yaml sets (one CloudFront hop).
+  app = moduleRef.createNestApplication<NestFastifyApplication>(
+    new FastifyAdapter(fastifyOptions(loadConfig({ ...REQUIRED_ENV, TRUST_PROXY: "1" }))),
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -351,6 +364,35 @@ describe("rate limiting", () => {
     });
 
     expect(other.statusCode).toBe(400);
+  });
+
+  // Behind CloudFront: the socket peer is an edge, and CloudFront appends the
+  // viewer's address to whatever X-Forwarded-For the client sent.
+  const viaCloudFront = (clientXff: string, viewer: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/registrations",
+      payload: {},
+      remoteAddress: "130.176.0.10",
+      headers: { "x-forwarded-for": `${clientXff}, ${viewer}` },
+    });
+
+  it("ignores a client-supplied X-Forwarded-For: rotating it does not escape the limit", async () => {
+    for (let i = 0; i < LIMITS.start.limit; i++) {
+      expect((await viaCloudFront(`6.6.6.${i}`, "203.0.113.7")).statusCode).toBe(400);
+    }
+
+    const blocked = await viaCloudFront("6.6.6.250", "203.0.113.7");
+
+    expect(blocked.statusCode).toBe(429);
+  });
+
+  it("counts viewers behind the same CloudFront edge separately", async () => {
+    for (let i = 0; i <= LIMITS.start.limit; i++) await viaCloudFront("6.6.6.6", "203.0.113.7");
+
+    const otherViewer = await viaCloudFront("6.6.6.6", "203.0.113.8");
+
+    expect(otherViewer.statusCode).toBe(400);
   });
 });
 

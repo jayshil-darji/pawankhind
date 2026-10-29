@@ -35,6 +35,19 @@ resource "aws_cloudfront_distribution" "web" {
     origin_access_control_id = aws_cloudfront_origin_access_control.web.id
   }
 
+  # The registration API on the dev instance. Plain HTTP on this leg (dev only).
+  origin {
+    origin_id   = "api-ec2"
+    domain_name = aws_instance.app.public_dns
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "web-s3"
     viewer_protocol_policy = "redirect-to-https"
@@ -49,19 +62,21 @@ resource "aws_cloudfront_distribution" "web" {
     }
   }
 
-  # Single-page-app fallback: a private bucket answers 403 for unknown keys.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
+  # No gate function here: the API and the Razorpay webhook are public.
+  # No custom_error_response on this distribution either: those apply to every
+  # behaviour and would turn API 403/404 into 200 + index.html. The gate
+  # function does the SPA fallback for the site instead.
+  ordered_cache_behavior {
+    path_pattern           = "/api/*"
+    target_origin_id       = "api-ec2"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = false
+    # AWS managed policy "CachingDisabled"
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    # AWS managed policy "AllViewerExceptHostHeader": all headers but Host, all query strings and cookies
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
   restrictions {
@@ -135,6 +150,11 @@ resource "aws_cloudfront_function" "gate" {
       var request = event.request;
       var auth = request.headers.authorization;
       if (auth && auth.value === "Basic ${local.gate_token}") {
+        // Single-page-app fallback: paths without a file extension get index.html.
+        var last = request.uri.split("/").pop();
+        if (last.indexOf(".") === -1) {
+          request.uri = "/index.html";
+        }
         return request;
       }
       return {
