@@ -22,5 +22,14 @@ export class LiveModeMarker implements OnApplicationBootstrap {
       "UPDATE environment_state SET live_activated_at = now() WHERE live_activated_at IS NULL",
     );
     if (marked.rowCount) this.log.log("first live start recorded");
+
+    // An UPDATE that matched nothing proves nothing: the row may be gone (TRUNCATE does not
+    // fire the delete trigger). Read the mark back and refuse to run live without it.
+    const check = await this.pool.query<{ live_activated_at: Date | null }>(
+      "SELECT live_activated_at FROM environment_state",
+    );
+    if (check.rows.length !== 1 || check.rows[0].live_activated_at === null) {
+      throw new Error("environment_state has no live mark; refusing to start in live mode");
+    }
   }
 }

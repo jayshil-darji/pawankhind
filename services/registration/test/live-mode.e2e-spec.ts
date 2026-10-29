@@ -128,6 +128,33 @@ describe("live start when the mark cannot be written", () => {
   });
 });
 
+describe("live start when the environment_state row is gone", () => {
+  let emptied: TestDatabase;
+
+  beforeAll(async () => {
+    emptied = await startTestDatabase();
+    // TRUNCATE skips the row-level delete trigger, so this is how the row can disappear.
+    await emptied.pool.query("TRUNCATE environment_state");
+  });
+
+  afterAll(async () => {
+    await emptied?.stop();
+  });
+
+  it("refuses to start, naming environment_state", async () => {
+    const outcome = await startApp(emptied, LIVE).then(
+      async (app) => {
+        await app.close();
+        return "started";
+      },
+      (error: unknown) => String(error),
+    );
+
+    expect(outcome).toMatch(/environment_state/);
+    expect(outcome).not.toMatch(/rzp_|20\d\d-/); // no key, no timestamp
+  });
+});
+
 describe("the real app in live mode", () => {
   it("records a new registration's payment as live", async () => {
     const app = await startApp(db, LIVE);
