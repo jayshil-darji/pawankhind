@@ -1,0 +1,10 @@
+{
+  "name": "@pawankhind/edge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CloudFront Functions source, deployed by infra/envs/dev and unit-tested with node --test.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
