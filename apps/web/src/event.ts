@@ -2,8 +2,8 @@
 const REGISTRATION_OPENS = new Date("2026-11-15T00:00:00+05:30").getTime();
 const REGISTRATION_CLOSES = new Date("2027-01-09T00:00:00+05:30").getTime(); // end of 8 Jan
 
-// TODO: confirm the real start time. 6:00 am Indian time is a placeholder.
-const RACE_START = new Date("2027-01-17T06:00:00+05:30").getTime();
+// 7:00 am Indian time.
+const RACE_START = new Date("2027-01-17T07:00:00+05:30").getTime();
 
 export const EVENT = {
   name: "Pawankhind",

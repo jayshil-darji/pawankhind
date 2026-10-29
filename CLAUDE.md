@@ -85,7 +85,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - The map animation must respect prefers-reduced-motion.
 - Artwork is supplied as files: src/assets/hero._, legend._, gallery/*. Compress to WebP (hero under 300 KB, gallery under 120 KB). Never hotlink images.
 - src/route.ts is a PLACEHOLDER route. Replace it with one generated from the real GPX before going live.
-- Dates in src/event.ts mirror the event row; the server is the authority. RACE_START is a placeholder until the real start time is confirmed.
+- Dates in src/event.ts mirror the event row; the server is the authority. RACE_START is 07:00 IST (confirmed 2026-10-29).
 - The page never mentions an age limit, and the partners section renders nothing until PARTNER_TIERS has entries.
 - Terms, Privacy and Refund pages state only decided rules. They need an owner/legal review (incl. cancellation and weather) before going live.
 - Fonts are self-hosted (@fontsource). No runtime requests to third-party hosts. No auto-rotating carousels.
@@ -97,3 +97,10 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Declaration wording is versioned; changing it means a new version (recorded with the registration).
 - Declarations are stored per registration (declarations_accepted_at + declarations_version), stamped by the server. Bump DECLARATION_VERSION in packages/schemas whenever the wording in RegistrationForm.tsx changes.
 - Every registration, any channel, requires both declarations. Online: the runner ticks them. Admin entry: the admin ticks them to confirm the signed paper form is held. The admin form must use the same schema and label the boxes as "Signed paper form received". Keep the signed forms physically until after the event.
+
+## Before go-live
+
+- Replace the personal contact number (EVENT.contact) with an event-only number/email.
+- Remove the pre-launch password gate from CloudFront.
+- Buy a domain and attach it to CloudFront and the API; update Razorpay and WhatsApp settings.
+- Replace the placeholder route with the real one; get legal pages reviewed.
