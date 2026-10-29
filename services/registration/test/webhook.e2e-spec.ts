@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Test } from "@nestjs/testing";
 import { Logger } from "@nestjs/common";
-import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
+import { httpAdapter } from "../src/http-options.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
 import {
@@ -74,7 +75,7 @@ beforeAll(async () => {
     .overrideProvider(PAYMENT_PROVIDER)
     .useValue(fake)
     .compile();
-  app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), {
+  app = moduleRef.createNestApplication<NestFastifyApplication>(httpAdapter(testConfig()), {
     rawBody: true,
   });
   await app.init();

@@ -1,5 +1,5 @@
 import { Test } from "@nestjs/testing";
-import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DECLARATION_VERSION } from "@pawankhind/schemas";
 import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
@@ -16,7 +16,7 @@ import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 import { FakeRedis } from "./support/fake-redis.js";
 import { LIMITS } from "../src/infra/rate-limit.js";
-import { fastifyOptions } from "../src/http-options.js";
+import { httpAdapter } from "../src/http-options.js";
 import { testConfig } from "./support/config.js";
 
 class FakeProvider implements PaymentProvider {
@@ -87,7 +87,7 @@ beforeAll(async () => {
     .compile();
   // Same adapter options as main.ts, with the value deploy/compose.dev.yaml sets (one CloudFront hop).
   app = moduleRef.createNestApplication<NestFastifyApplication>(
-    new FastifyAdapter(fastifyOptions(testConfig({ TRUST_PROXY: "1" }))),
+    httpAdapter(testConfig({ TRUST_PROXY: "1" })),
   );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
