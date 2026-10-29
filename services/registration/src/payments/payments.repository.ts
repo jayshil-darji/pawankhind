@@ -1,6 +1,7 @@
 import pg from "pg";
 import { withTransaction } from "../infra/transaction.js";
 import { isUniqueViolation } from "../infra/db-errors.js";
+import { allocateBib } from "./allocate-bib.js";
 import type { Config } from "../config.js";
 
 /** The Razorpay mode a payment was created in. Stamped by the server, never by a client. */
@@ -182,13 +183,7 @@ export class PaymentsRepository {
         }
       }
 
-      const allocated = await client.query<{ bib: number }>(
-        `UPDATE events SET next_bib = next_bib + 1
-          WHERE id = $1
-          RETURNING next_bib - 1 AS bib`,
-        [registration.event_id],
-      );
-      const bib = allocated.rows[0].bib;
+      const bib = await allocateBib(client, registration.event_id);
 
       await client.query(
         `UPDATE registrations
