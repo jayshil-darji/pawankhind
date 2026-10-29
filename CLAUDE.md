@@ -41,7 +41,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - The client never sends amounts, order IDs or BIBs. The server decides all three.
 - /api/payments/verify must check the signature against the order ID stored on OUR server, then confirm with Razorpay that the payment is `captured` and the amount matches. Never skip either check.
-- BIBs are issued only inside confirmOnlinePayment, in one transaction. No other code path may assign a BIB.
+- BIBs are allocated only by allocateBib, called only from the two confirmation paths, each inside the transaction that records a captured payment. Today the only path is confirmOnlinePayment; paper + cash (admin plan A10) will be the second. No other code path may assign a BIB. test/bib-allocation.source.spec.ts enforces this: add a new path to its allowlist only with that slice.
 - Never log secrets, signatures or full request bodies.
 - Every endpoint validates input with the zod schemas in @pawankhind/schemas.
 - One registration has at most one payment order. Resume reuses it; nothing else may create a second. A second payment for a confirmed registration is recorded and flagged, never given a BIB.
@@ -58,7 +58,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Webhooks are verified against the RAW request body with a constant-time HMAC compare. Never re-serialise the JSON before checking.
 - A valid signature is not proof of payment: always confirm with the Razorpay API (order, amount, `captured`) before issuing a BIB.
 - Reply codes control retries: 400 for junk, 5xx only when a retry can help, 200 for everything else (log, don't retry).
-- BIBs are still issued only by confirmOnlinePayment. The webhook and /verify share it and must stay idempotent.
+- The webhook and /verify reach a BIB only through confirmOnlinePayment (which calls allocateBib). They share it and must stay idempotent.
 
 ## Background jobs
 

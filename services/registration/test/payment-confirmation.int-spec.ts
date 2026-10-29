@@ -192,6 +192,56 @@ describe("confirmOnlinePayment", () => {
     expect(row.status).toBe("captured");
   });
 
+  it("rolls the allocated BIB back when the transaction fails after allocateBib", async () => {
+    const h = await heldWithOrder(1);
+
+    // The last statement in the confirm transaction marks the payment captured; make it fail.
+    await db.pool.query(`
+      CREATE FUNCTION fail_capture() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'forced failure after allocateBib'; END $$;
+      CREATE TRIGGER fail_capture BEFORE UPDATE ON payments
+        FOR EACH ROW WHEN (NEW.status = 'captured') EXECUTE FUNCTION fail_capture();`);
+    try {
+      await expect(confirm(h)).rejects.toThrow("forced failure after allocateBib");
+    } finally {
+      await db.pool.query("DROP TRIGGER fail_capture ON payments; DROP FUNCTION fail_capture();");
+    }
+
+    expect((await event()).next_bib).toBe(1001);
+    const reg = await db.pool.query<{ status: string; bib_number: number | null }>(
+      "SELECT status, bib_number FROM registrations WHERE id = $1",
+      [h.registrationId],
+    );
+    expect(reg.rows[0]).toEqual({ status: "held", bib_number: null });
+    const pay = await db.pool.query<{ status: string }>(
+      "SELECT status FROM payments WHERE provider_order_id = $1",
+      [h.orderId],
+    );
+    expect(pay.rows[0].status).toBe("created");
+  });
+
+  it("issues unique, gap-free BIBs when 5 confirmations are forced to overlap on the events row", async () => {
+    const holds = [];
+    for (let i = 1; i <= 5; i++) holds.push(await heldWithOrder(i));
+
+    // Hold the events row, which allocateBib must update, so every confirmation queues on it.
+    const blocker = await db.pool.connect();
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT 1 FROM events WHERE id = $1 FOR UPDATE", [eventId]);
+
+    const pending = holds.map((h) => confirm(h));
+    await waitForBlocked(5);
+
+    await blocker.query("COMMIT");
+    blocker.release();
+
+    const results = await Promise.all(pending);
+
+    const bibs = results.map((r) => (r.ok ? r.bib : -1)).sort((a, b) => a - b);
+    expect(bibs).toEqual([1001, 1002, 1003, 1004, 1005]);
+    expect((await event()).next_bib).toBe(1006);
+  });
+
   it("issues one BIB when 10 identical payments are forced to overlap", async () => {
     const h = await heldWithOrder(1);
 
