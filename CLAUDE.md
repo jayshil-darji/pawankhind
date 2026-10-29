@@ -80,7 +80,11 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 
 - /api/\* goes from CloudFront to the instance's public DNS on HTTP port 80 (no cache, no gate). The security group allows port 80 only from the CloudFront origin-facing prefix list.
 - The instance's public DNS changes on every stop/start, and is empty while the instance is stopped. Run terraform plan/apply only while the instance is RUNNING, and re-apply after each start. Until then CloudFront points at the old name and /api/\* returns 502/504.
-- The gate function (default behaviour only) also does the SPA fallback: extension-less paths are rewritten to /index.html. There is no distribution-wide custom_error_response, because it would turn API 403/404 into 200 + HTML. At go-live remove only the password check from the function. Keep the rewrite.
+- The gate function (source and node tests in infra/edge/gate.js) runs on the default behaviour, /admin* and /api/admin*, with one realm and one password (gate_password). It also does the SPA fallback: extension-less non-API paths are rewritten to /index.html. There is no distribution-wide custom_error_response, because it would turn API 403/404 into 200 + HTML.
+- /api/admin* is ordered before /api/* (first match wins). /api/* (public API, Razorpay webhook) never gets a function. infra/edge/web-tf.test.mjs checks both.
+- For /api/admin* the gate deletes the Authorization header before forwarding: the gate password must never travel on the plain-HTTP origin leg. The admin app authenticates with its own session cookie.
+- Admin traffic on dev is NOT encrypted between CloudFront and the instance until origin TLS (production plan P8 / admin plan L3). Dev holds only fake data and throwaway admin accounts; never use real credentials or data there before P8.
+- Response headers policies: site (HSTS, nosniff, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy) and admin (the same plus Cache-Control: no-store). No CSP yet: one that is wrong breaks the Razorpay checkout.
 
 ## Web app: result page
 
@@ -111,7 +115,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 ## Before go-live
 
 - Replace the personal contact number (EVENT.contact) with an event-only number/email.
-- Remove the pre-launch password check from the CloudFront gate function (keep its SPA rewrite).
+- Remove the pre-launch password check for the public site only. /admin* and /api/admin* stay gated after go-live, and the SPA rewrite stays.
 - Buy a domain and attach it to CloudFront and the API; update Razorpay and WhatsApp settings.
 - Replace the placeholder route with the real one; get legal pages reviewed.
 - Remove VITE_ALLOW_PHASE_OVERRIDE from the deploy-web build step in .github/workflows/release.yaml. It lets anyone switch the landing page's registration state with ?phase=.

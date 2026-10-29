@@ -26,5 +26,11 @@ export default tseslint.config(
     files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    // CloudFront Functions are classic scripts: CloudFront calls the top-level handler().
+    files: ["infra/edge/**/*.js"],
+    languageOptions: { sourceType: "script", globals: {} },
+    rules: { "@typescript-eslint/no-unused-vars": ["error", { varsIgnorePattern: "^handler$" }] },
+  },
   prettier,
 );

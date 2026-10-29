@@ -8,3 +8,9 @@ coverage
 .terraform/
 *.tfstate
 *.tfstate.*
+# Saved Terraform plans hold variable values (incl. secrets); local tfvars too.
+tfplan
+*.tfplan
+crash.log
+*.tfvars
+*.auto.tfvars

@@ -55,7 +55,45 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
     # AWS managed policy "CachingOptimized"
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web["site"].id
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.gate.arn
+    }
+  }
+
+  # Admin UI (S3). Same gate as the site, plus Cache-Control: no-store on every response.
+  ordered_cache_behavior {
+    path_pattern               = "/admin*"
+    target_origin_id           = "web-s3"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web["admin"].id
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.gate.arn
+    }
+  }
+
+  # Admin API (EC2). Must stay before /api/*: CloudFront uses the first matching behaviour.
+  # "/api/admin*" (not "/api/admin/*") so a bare /api/admin cannot fall through ungated.
+  # The gate removes its Authorization header before the plain-HTTP leg to the instance.
+  ordered_cache_behavior {
+    path_pattern           = "/api/admin*"
+    target_origin_id       = "api-ec2"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = false
+    # AWS managed policy "CachingDisabled"
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    # AWS managed policy "AllViewerExceptHostHeader": all headers but Host, all query strings and cookies
+    origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web["admin"].id
     function_association {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.gate.arn
@@ -76,7 +114,8 @@ resource "aws_cloudfront_distribution" "web" {
     # AWS managed policy "CachingDisabled"
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     # AWS managed policy "AllViewerExceptHostHeader": all headers but Host, all query strings and cookies
-    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web["site"].id
   }
 
   restrictions {
@@ -139,32 +178,75 @@ variable "gate_password" {
 
 locals {
   gate_token = base64encode("${var.gate_user}:${var.gate_password}")
+  gate_realm = "Pawankhind dev"
+  # Source and tests: infra/edge (node --test). Only these two placeholders are filled in.
+  gate_source = file("${path.module}/../../edge/gate.js")
+  gate_code   = replace(replace(local.gate_source, "__GATE_TOKEN__", local.gate_token), "__GATE_REALM__", local.gate_realm)
+
+  # Extra headers per response headers policy, on top of the shared security headers.
+  response_header_extras = {
+    site = {}
+    admin = {
+      "Cache-Control" = "no-store"
+      "X-Robots-Tag"  = "noindex, nofollow"
+    }
+  }
 }
 
 resource "aws_cloudfront_function" "gate" {
   name    = "pawankhind-dev-gate"
   runtime = "cloudfront-js-2.0"
   publish = true
-  code    = <<-EOT
-    function handler(event) {
-      var request = event.request;
-      var auth = request.headers.authorization;
-      if (auth && auth.value === "Basic ${local.gate_token}") {
-        // Single-page-app fallback: paths without a file extension get index.html.
-        var last = request.uri.split("/").pop();
-        if (last.indexOf(".") === -1) {
-          request.uri = "/index.html";
-        }
-        return request;
-      }
-      return {
-        statusCode: 401,
-        statusDescription: "Unauthorized",
-        headers: {
-          "www-authenticate": { value: 'Basic realm="Pawankhind dev"' },
-          "x-robots-tag": { value: "noindex, nofollow" }
-        }
-      };
+  code    = local.gate_code
+
+  lifecycle {
+    precondition {
+      condition     = length(split("__GATE_TOKEN__", local.gate_source)) == 2 && length(split("__GATE_REALM__", local.gate_source)) == 2
+      error_message = "infra/edge/gate.js must contain __GATE_TOKEN__ and __GATE_REALM__ exactly once each."
     }
-  EOT
+  }
+}
+
+# No Content-Security-Policy yet: a wrong one would break the Razorpay checkout (see the A4 notes).
+resource "aws_cloudfront_response_headers_policy" "web" {
+  for_each = local.response_header_extras
+
+  name    = "pawankhind-dev-${each.key}-headers"
+  comment = "Security headers (${each.key})"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = false
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+
+  custom_headers_config {
+    # Features this site never uses. Payment is left alone for the Razorpay checkout iframe.
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(), usb=(), browsing-topics=()"
+      override = true
+    }
+    dynamic "items" {
+      for_each = each.value
+      content {
+        header   = items.key
+        value    = items.value
+        override = true
+      }
+    }
+  }
 }
