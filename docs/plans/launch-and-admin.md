@@ -382,6 +382,12 @@ A1–A3 touch no infra and may start before Track L finishes.
      - `/api/registrations/x/status` needs no gate.
 - Plus a curl sequence.
 - Risks: cached Basic credentials are scoped by origin and realm (the same realm everywhere; the test proves it); behaviour precedence.
+- **As built (dev, before L3):**
+  - One gate function (`infra/edge/gate.js`, node tests) on all three gated behaviours instead of three functions: it never rewrites `/api/…`, which removes the reason for a separate API function, and the same code guarantees the same realm.
+  - Path pattern `/api/admin*` (not `/api/admin/*`), so a bare `/api/admin` cannot fall through to the ungated `/api/*`.
+  - The gate deletes `Authorization` on `/api/admin*` before forwarding, so the gate password never crosses the origin leg.
+  - **Dev only, on the HTTP origin leg:** admin traffic between CloudFront and the instance is not encrypted until P8 (L3). Dev holds fake data and throwaway admin accounts only.
+  - No CSP yet: a report-only CSP is proposed for a later slice, to be enforced only once it has been seen not to break the Razorpay checkout. `site_gate_enabled` stays with the prod slices.
 
 **A5 · CLI user management + enrolment + TOTP.** Depends on: A3.
 
