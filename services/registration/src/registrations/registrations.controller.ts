@@ -11,7 +11,11 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
-import { participantSchema, registrationIdSchema, verifyPaymentSchema } from "@pawankhind/schemas";
+import {
+  registrationIdSchema,
+  verifyPaymentSchema,
+  registrationRequestSchema,
+} from "@pawankhind/schemas";
 import type { z } from "zod";
 import { APP_CONFIG } from "../infra/tokens.js";
 import type { Config } from "../config.js";
@@ -42,7 +46,7 @@ export class RegistrationsController {
   @Post("registrations")
   @RateLimit(LIMITS.start)
   async start(@Body() body: unknown) {
-    const participant = parse(participantSchema, body);
+    const participant = parse(registrationRequestSchema, body);
     const result = await this.flow.start(participant);
 
     if (!result.ok) {

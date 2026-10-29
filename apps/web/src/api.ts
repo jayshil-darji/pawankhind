@@ -1,7 +1,7 @@
 import type { z } from "zod";
-import type { participantSchema } from "@pawankhind/schemas";
+import type { registrationRequestSchema } from "@pawankhind/schemas";
 
-export type ParticipantInput = z.input<typeof participantSchema>;
+export type ParticipantInput = z.input<typeof registrationRequestSchema>;
 
 export interface CheckoutDetails {
   keyId: string;

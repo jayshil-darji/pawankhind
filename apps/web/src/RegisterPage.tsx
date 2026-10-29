@@ -103,7 +103,7 @@ export default function RegisterPage() {
             <strong>{new Date(view.start.holdExpiresAt).toLocaleTimeString()}</strong>.
           </p>
           <button
-            className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white"
+            className="w-full rounded-lg bg-orange-600 hover:bg-orange-700 px-4 py-3 font-medium text-white"
             onClick={() => void pay(view.start, view.participant)}
           >
             Pay ₹{view.start.checkout.amountPaise / 100}

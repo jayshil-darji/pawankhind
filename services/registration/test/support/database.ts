@@ -46,5 +46,7 @@ export function person(i: number): ParticipantInput {
     city: "Visnagar",
     emergencyContactName: "Contact",
     emergencyContactMobile: "9876543211",
+    healthDeclaration: true,
+    termsAccepted: true,
   };
 }

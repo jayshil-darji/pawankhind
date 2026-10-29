@@ -1,4 +1,5 @@
 import pg from "pg";
+import { DECLARATION_VERSION } from "@pawankhind/schemas";
 import { withTransaction } from "../infra/transaction.js";
 import { isUniqueViolation } from "../infra/db-errors.js";
 
@@ -11,6 +12,9 @@ export interface ParticipantInput {
   city: string;
   emergencyContactName: string;
   emergencyContactMobile: string;
+  /** Online: ticked by the runner. Admin entry: ticked by the admin from the signed paper form. */
+  healthDeclaration: true;
+  termsAccepted: true;
 }
 
 export type ReserveResult =
@@ -46,9 +50,9 @@ export class RegistrationsRepository {
         const inserted = await client.query(
           `INSERT INTO registrations
              (event_id, status, channel, full_name, date_of_birth, gender, mobile,
-              tshirt_size, city, emergency_contact_name, emergency_contact_mobile, hold_expires_at)
+              tshirt_size, city, emergency_contact_name, emergency_contact_mobile, hold_expires_at, declarations_accepted_at, declarations_version)
            VALUES ($1, 'held', 'online', $2, $3, $4, $5, $6, $7, $8, $9,
-                   now() + make_interval(mins => $10))
+                   now() + make_interval(mins => $10), now(), $11)
            RETURNING id, hold_expires_at`,
           [
             eventId,
@@ -61,6 +65,7 @@ export class RegistrationsRepository {
             p.emergencyContactName,
             p.emergencyContactMobile,
             HOLD_MINUTES,
+            DECLARATION_VERSION,
           ],
         );
 

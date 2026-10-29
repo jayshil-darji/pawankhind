@@ -1,5 +1,6 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { DECLARATION_VERSION } from "@pawankhind/schemas";
 import pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
@@ -350,5 +351,69 @@ describe("rate limiting", () => {
     });
 
     expect(other.statusCode).toBe(400);
+  });
+});
+
+describe("declarations", () => {
+  it("rejects a registration without the health declaration", async () => {
+    const res = await startRegistration(1, { ...person(1), healthDeclaration: false });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string; issues: { field: string }[] }>().issues).toContainEqual(
+      expect.objectContaining({ field: "healthDeclaration" }),
+    );
+  });
+
+  it("rejects a registration without accepting the terms", async () => {
+    const withoutTerms: Record<string, unknown> = { ...person(1) };
+    delete withoutTerms.termsAccepted;
+
+    const res = await startRegistration(1, withoutTerms);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ issues: { field: string }[] }>().issues).toContainEqual(
+      expect.objectContaining({ field: "termsAccepted" }),
+    );
+  });
+
+  it("records when, and to which wording version, the declarations were accepted", async () => {
+    const started = (await startRegistration(1)).json<{ registrationId: string }>();
+
+    const row = await db.pool.query<{ version: string | null; fresh: boolean | null }>(
+      `SELECT declarations_version AS version,
+              declarations_accepted_at > now() - interval '1 minute' AS fresh
+         FROM registrations WHERE id = $1`,
+      [started.registrationId],
+    );
+
+    expect(row.rows[0]).toEqual({ version: DECLARATION_VERSION, fresh: true });
+  });
+
+  it("keeps the original acceptance time when the same person starts again", async () => {
+    const first = (await startRegistration(1)).json<{ registrationId: string }>();
+    const read = async () =>
+      (
+        await db.pool.query<{ at: Date }>(
+          `SELECT declarations_accepted_at AS at FROM registrations WHERE id = $1`,
+          [first.registrationId],
+        )
+      ).rows[0]?.at;
+    const before = await read();
+
+    const again = (await startRegistration(1)).json<{ registrationId: string; resumed: boolean }>();
+
+    expect(again.resumed).toBe(true);
+    expect(again.registrationId).toBe(first.registrationId);
+    expect(await read()).toEqual(before);
+  });
+
+  it("refuses a half-recorded acceptance", async () => {
+    const started = (await startRegistration(1)).json<{ registrationId: string }>();
+
+    await expect(
+      db.pool.query(`UPDATE registrations SET declarations_accepted_at = NULL WHERE id = $1`, [
+        started.registrationId,
+      ]),
+    ).rejects.toThrow(/registrations_declarations_together/);
   });
 });
