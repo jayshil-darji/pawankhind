@@ -12,6 +12,23 @@ export interface TestDatabase {
 
 const MIGRATIONS_DIR = join(import.meta.dirname, "../../migrations");
 
+/** A test that waits for a pool connection fails after this long instead of hanging. */
+export const POOL_CONNECTION_TIMEOUT_MS = 5000;
+
+/** Every pool in the tests comes from here (test-database.source.spec.ts enforces it). The
+ *  owner ends it before its container stops. */
+export function testPool(connectionString: string, options: { max?: number } = {}): pg.Pool {
+  const pool = new pg.Pool({
+    connectionString,
+    max: options.max,
+    connectionTimeoutMillis: POOL_CONNECTION_TIMEOUT_MS,
+  });
+  pool.on("error", () => {
+    // During teardown the server may tell idle clients it is going away. Not a test failure.
+  });
+  return pool;
+}
+
 /** Runs the Up part of one migration file, the way startTestDatabase does. */
 export async function applyMigration(pool: pg.Pool, file: string): Promise<void> {
   const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
@@ -23,10 +40,7 @@ export async function startTestDatabase(options: { upTo?: string } = {}): Promis
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     "postgres:17",
   ).start();
-  const pool = new pg.Pool({ connectionString: container.getConnectionUri(), max: 20 });
-  pool.on("error", () => {
-    // During teardown the server may tell idle clients it is going away. Not a test failure.
-  });
+  const pool = testPool(container.getConnectionUri(), { max: 20 });
   for (const file of readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql") && (!options.upTo || f <= options.upTo))
     .sort()) {

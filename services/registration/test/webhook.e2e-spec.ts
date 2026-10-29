@@ -2,11 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Test } from "@nestjs/testing";
 import { Logger } from "@nestjs/common";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import pg from "pg";
+import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
-import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { person, startTestDatabase, TestDatabase, testPool } from "./support/database.js";
 import { testConfig } from "./support/config.js";
 
 const WEBHOOK_SECRET = "whsec_test_secret";
@@ -56,8 +56,7 @@ const fake = new FakeProvider();
 
 beforeAll(async () => {
   db = await startTestDatabase();
-  appPool = new pg.Pool({ connectionString: db.connectionUri });
-  appPool.on("error", () => {});
+  appPool = testPool(db.connectionUri);
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PG_POOL)

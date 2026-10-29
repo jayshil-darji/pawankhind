@@ -1,4 +1,4 @@
-import pg from "pg";
+import type pg from "pg";
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import {
   ParticipantInput,
@@ -6,6 +6,7 @@ import {
 } from "../src/registrations/registrations.repository.js";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { testPool } from "./support/database.js";
 
 let container: StartedPostgreSqlContainer;
 let pool: pg.Pool;
@@ -39,10 +40,7 @@ async function applyMigrations(p: pg.Pool) {
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer("postgres:17").start();
-  pool = new pg.Pool({ connectionString: container.getConnectionUri() });
-  pool.on("error", () => {
-    // During teardown the server may tell idle clients it is going away. Not a test failure.
-  });
+  pool = testPool(container.getConnectionUri());
 
   await applyMigrations(pool);
   repo = new RegistrationsRepository(pool);

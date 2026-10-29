@@ -1,11 +1,11 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DECLARATION_VERSION } from "@pawankhind/schemas";
-import pg from "pg";
+import type pg from "pg";
 import { AppModule } from "../src/app.module.js";
 import { APP_CONFIG, PAYMENT_PROVIDER, PG_POOL, REDIS } from "../src/infra/tokens.js";
 import type { PaymentProvider, ProviderPayment } from "../src/payments/payment-provider.js";
-import { person, startTestDatabase, TestDatabase } from "./support/database.js";
+import { person, startTestDatabase, TestDatabase, testPool } from "./support/database.js";
 import { HoldSweeper } from "../src/registrations/hold-sweeper.js";
 import { ReconciliationJob } from "../src/payments/reconciliation.job.js";
 import { FakeRedis } from "./support/fake-redis.js";
@@ -67,8 +67,7 @@ const fakeRedis = new FakeRedis();
 
 beforeAll(async () => {
   db = await startTestDatabase();
-  appPool = new pg.Pool({ connectionString: db.connectionUri });
-  appPool.on("error", () => {});
+  appPool = testPool(db.connectionUri);
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PG_POOL)
