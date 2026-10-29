@@ -71,10 +71,24 @@ resource "aws_iam_instance_profile" "app" {
   role = aws_iam_role.app.name
 }
 
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 resource "aws_security_group" "app" {
   name        = "pawankhind-dev-app"
   description = "No inbound. Access via SSM and Tailscale."
   vpc_id      = data.aws_vpc.default.id
+
+  # The only inbound path: CloudFront edges reaching the API for /api/*.
+  # (Description above left as is: changing it would replace the SG.)
+  ingress {
+    description     = "HTTP from CloudFront origin-facing only"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
+  }
 
   egress {
     from_port   = 0
@@ -119,4 +133,9 @@ resource "aws_instance" "app" {
 
 output "instance_id" {
   value = aws_instance.app.id
+}
+
+# Changes on every stop/start; CloudFront's API origin follows it on the next apply.
+output "instance_public_dns" {
+  value = aws_instance.app.public_dns
 }
