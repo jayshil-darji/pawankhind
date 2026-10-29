@@ -80,7 +80,12 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo build --filter=@pawankhind/web...
+      - name: Build web app
+        run: pnpm turbo build --filter=@pawankhind/web...
+        env:
+          # For the gated dev site only: lets ?phase=before|open|after show each
+          # registration state. REMOVE BEFORE GO-LIVE (see CLAUDE.md "Before go-live").
+          VITE_ALLOW_PHASE_OVERRIDE: "true"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

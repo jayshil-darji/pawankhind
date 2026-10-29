@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import Countdown from "./Countdown.js";
-import { EVENT, registrationPhase, type RegistrationPhase } from "./event.js";
+import { EVENT, phaseOverride, registrationPhase, type RegistrationPhase } from "./event.js";
 import Faq from "./Faq.js";
 import Gallery from "./Gallery.js";
 import Hero from "./Hero.js";
@@ -20,13 +20,13 @@ const STATS = [
   { big: "17 JAN", small: "Sunday, race day" },
 ];
 
-/** In development only, ?phase=open|before|after lets you see each state. Never in the built site. */
 function initialPhase(): RegistrationPhase {
-  const forced = import.meta.env.DEV
-    ? new URLSearchParams(window.location.search).get("phase")
-    : null;
-  if (forced === "before" || forced === "open" || forced === "after") return forced;
-  return registrationPhase(new Date());
+  // Named fields, not the whole import.meta.env, so Vite inlines each one at build time.
+  const env = {
+    DEV: import.meta.env.DEV,
+    VITE_ALLOW_PHASE_OVERRIDE: import.meta.env.VITE_ALLOW_PHASE_OVERRIDE,
+  };
+  return phaseOverride(window.location.search, env) ?? registrationPhase(new Date());
 }
 
 function ctaLabel(phase: RegistrationPhase): string {

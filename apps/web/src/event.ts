@@ -26,6 +26,23 @@ export function registrationPhase(now: Date): RegistrationPhase {
   return "open";
 }
 
+export interface PhaseOverrideEnv {
+  DEV: boolean;
+  VITE_ALLOW_PHASE_OVERRIDE?: string;
+}
+
+/**
+ * ?phase=before|open|after, to see each state. Honoured only in development, or in a
+ * build made with VITE_ALLOW_PHASE_OVERRIDE="true" (the gated dev site, never go-live).
+ * Display only: the server still decides whether registration is open.
+ */
+export function phaseOverride(search: string, env: PhaseOverrideEnv): RegistrationPhase | null {
+  if (!env.DEV && env.VITE_ALLOW_PHASE_OVERRIDE !== "true") return null;
+  const forced = new URLSearchParams(search).get("phase");
+  if (forced === "before" || forced === "open" || forced === "after") return forced;
+  return null;
+}
+
 export interface TimeLeft {
   days: number;
   hours: number;

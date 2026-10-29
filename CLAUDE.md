@@ -110,6 +110,7 @@ Learning project. Monorepo: pnpm workspaces + Turborepo, TypeScript (ESM, NodeNe
 - Remove the pre-launch password check from the CloudFront gate function (keep its SPA rewrite).
 - Buy a domain and attach it to CloudFront and the API; update Razorpay and WhatsApp settings.
 - Replace the placeholder route with the real one; get legal pages reviewed.
+- Remove VITE_ALLOW_PHASE_OVERRIDE from the deploy-web build step in .github/workflows/release.yaml. It lets anyone switch the landing page's registration state with ?phase=.
 
 ## Current state (2026-10-29)
 
