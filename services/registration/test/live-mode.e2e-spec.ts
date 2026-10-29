@@ -63,6 +63,71 @@ afterAll(async () => {
   await db?.stop();
 });
 
+describe("live marker, set by the real app at startup", () => {
+  let fresh: TestDatabase;
+
+  beforeAll(async () => {
+    fresh = await startTestDatabase();
+  });
+
+  afterAll(async () => {
+    await fresh?.stop();
+  });
+
+  const mark = async () =>
+    (
+      await fresh.pool.query<{ live_activated_at: Date | null }>(
+        "SELECT live_activated_at FROM environment_state",
+      )
+    ).rows[0].live_activated_at;
+
+  // In order: one database, three starts.
+  it("is not set by a start in test mode", async () => {
+    await (await startApp(fresh, {})).close();
+
+    expect(await mark()).toBeNull();
+  });
+
+  it("is set by the first start in live mode", async () => {
+    await (await startApp(fresh, LIVE)).close();
+
+    expect(await mark()).toBeInstanceOf(Date);
+  });
+
+  it("keeps the first time on later live starts", async () => {
+    const first = await mark();
+
+    await (await startApp(fresh, LIVE)).close();
+
+    expect(await mark()).toEqual(first);
+  });
+});
+
+describe("live start when the mark cannot be written", () => {
+  let broken: TestDatabase;
+
+  beforeAll(async () => {
+    broken = await startTestDatabase();
+    await broken.pool.query("ALTER TABLE environment_state RENAME TO environment_state_moved");
+  });
+
+  afterAll(async () => {
+    await broken?.stop();
+  });
+
+  it("refuses to start rather than run live unmarked", async () => {
+    const outcome = await startApp(broken, LIVE).then(
+      async (app) => {
+        await app.close();
+        return "started";
+      },
+      (error: unknown) => String(error),
+    );
+
+    expect(outcome).toMatch(/environment_state/);
+  });
+});
+
 describe("the real app in live mode", () => {
   it("records a new registration's payment as live", async () => {
     const app = await startApp(db, LIVE);
