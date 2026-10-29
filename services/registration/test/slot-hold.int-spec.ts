@@ -22,6 +22,8 @@ function person(i: number): ParticipantInput {
     city: "Visnagar",
     emergencyContactName: "Janvi",
     emergencyContactMobile: "9876543210",
+    healthDeclaration: true,
+    termsAccepted: true,
   };
 }
 
