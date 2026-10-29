@@ -27,7 +27,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # Not part of the normal local flow (pnpm start:dev runs the app on the host), so it sits behind
+  # a profile: pnpm infra:up starts only Postgres and Redis. Start it on purpose with pnpm infra:app.
   registration:
+    profiles: ["app"]
     build:
       context: ..
       dockerfile: services/registration/Dockerfile
@@ -35,6 +38,17 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
       PORT: "3001"
+      # Inside the container the app must listen on all interfaces, or the published port cannot reach it.
+      HOST: 0.0.0.0
+      # Local is always test mode (the app refuses live outside prod), as in deploy/compose.dev.yaml.
+      APP_ENV: dev
+      RAZORPAY_MODE: test
+      # ":-" rather than ":?": Compose interpolates every service even when its profile is off, so
+      # ":?" would make plain `pnpm infra:up` demand Razorpay keys. Without them the app refuses
+      # to start and names the missing variable.
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
