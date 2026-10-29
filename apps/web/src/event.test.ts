@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { registrationPhase, timeToRaceStart } from "./event.js";
+import { phaseOverride, registrationPhase, timeToRaceStart } from "./event.js";
+
+describe("phaseOverride", () => {
+  const production = { DEV: false };
+  const flagged = { DEV: false, VITE_ALLOW_PHASE_OVERRIDE: "true" };
+  const development = { DEV: true };
+
+  it("is ignored in a production build without VITE_ALLOW_PHASE_OVERRIDE", () => {
+    for (const phase of ["before", "open", "after"]) {
+      expect(phaseOverride(`?phase=${phase}`, production)).toBeNull();
+    }
+  });
+
+  it("works in a production build with VITE_ALLOW_PHASE_OVERRIDE=true", () => {
+    expect(phaseOverride("?phase=before", flagged)).toBe("before");
+    expect(phaseOverride("?phase=open", flagged)).toBe("open");
+    expect(phaseOverride("?phase=after", flagged)).toBe("after");
+  });
+
+  it("needs the flag to be exactly true", () => {
+    for (const value of ["TRUE", "1", "yes", "true ", ""]) {
+      expect(
+        phaseOverride("?phase=open", { DEV: false, VITE_ALLOW_PHASE_OVERRIDE: value }),
+      ).toBeNull();
+    }
+  });
+
+  it("ignores invalid phase values, with or without the flag", () => {
+    for (const env of [production, flagged, development]) {
+      for (const search of [
+        "?phase=OPEN",
+        "?phase=closed",
+        "?phase=",
+        "?phase=open%20",
+        "?other=open",
+        "",
+      ]) {
+        expect(phaseOverride(search, env)).toBeNull();
+      }
+    }
+  });
+});
 
 describe("registrationPhase", () => {
   it("opens at midnight Indian time on 15 November 2026", () => {

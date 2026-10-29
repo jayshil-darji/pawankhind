@@ -72,3 +72,31 @@ describe("landing page", () => {
     expect(document.body).not.toHaveTextContent(/age limit|minimum age/i);
   });
 });
+
+// Vitest runs with DEV=true; these stub the values a production build would inline.
+describe("?phase override in a production build", () => {
+  beforeEach(() => {
+    vi.stubEnv("DEV", false);
+    window.history.replaceState(null, "", "/?phase=open");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("is ignored without VITE_ALLOW_PHASE_OVERRIDE", () => {
+    renderAt("2026-10-28T10:00:00Z");
+
+    expect(screen.getByText(/registration opens on 15 november 2026/i)).toBeInTheDocument();
+    expect(screen.queryByText("REGISTRATION FORM")).toBeNull();
+  });
+
+  it("shows the form with VITE_ALLOW_PHASE_OVERRIDE=true", () => {
+    vi.stubEnv("VITE_ALLOW_PHASE_OVERRIDE", "true");
+
+    renderAt("2026-10-28T10:00:00Z");
+
+    expect(screen.getByText("REGISTRATION FORM")).toBeInTheDocument();
+  });
+});
